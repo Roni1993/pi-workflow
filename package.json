@@ -1,0 +1,10 @@
+{
+  "name": "pi-workflow",
+  "version": "0.1.0",
+  "description": "Pi workflow package: idle-guard + background agents (/bg) + jj integration for the CachyOS+Nix workflow",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}
