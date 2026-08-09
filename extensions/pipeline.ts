@@ -1,5 +1,5 @@
 import * as fs from "node:fs/promises"
-import { existsSync, readFileSync, statSync } from "node:fs"
+import { existsSync, readFileSync, statSync, appendFileSync } from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { execFile } from "node:child_process"
@@ -424,7 +424,14 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
   }
 
   const monitor = setInterval(() => {
-    void tick()
+    tick().catch((e) => {
+      try {
+        appendFileSync(
+          path.join(WORKFLOW_DIR, "pipeline-debug.log"),
+          `[${new Date().toISOString()}] tick error: ${e instanceof Error ? e.stack ?? e.message : String(e)}\n`,
+        )
+      } catch {}
+    })
   }, MONITOR_MS)
   monitor.unref?.()
 
