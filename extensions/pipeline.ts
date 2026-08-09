@@ -241,23 +241,48 @@ export default function pipelineExtension(pi: ExtensionAPI) {
   async function startRca(p: Pipeline): Promise<void> {
     const rcaPath = path.join(p.dir, "rca.md")
     const implDir = path.join(os.homedir(), ".pi", "agent", "bg", p.implId ?? "")
-    const prompt = `Investigate why a background implementation agent appears stuck.
+    let tail = "(empty)"
+    try {
+      const content = readFileSync(path.join(implDir, "out.jsonl"), "utf8")
+      const events = content
+        .split("\n")
+        .filter(Boolean)
+        .slice(-25)
+        .map((l) => {
+          try {
+            const e = JSON.parse(l)
+            const ev = e.assistantMessageEvent
+            const a = e.args
+            return `[${e.type}]${ev && ev.type ? ` ${ev.type}` : ""}${a && a.command ? ` cmd=${String(a.command).slice(0, 120)}` : ""}${ev && ev.delta ? ` ${String(ev.delta).slice(0, 120)}` : ""}`
+          } catch {
+            return ""
+          }
+        })
+        .filter(Boolean)
+        .join("\n")
+      tail = events || "(empty)"
+    } catch {}
+    const prompt = `Investigate why a background implementation agent appears stuck (no activity).
 
-Implementer prompt: ${(p.implPrompt ?? p.statement).slice(0, 800)}
+Implementer prompt: ${(p.implPrompt ?? p.statement).slice(0, 500)}
 
-Its session file: ${implDir}/session/
-Recent activity (tail of event log): the file ${implDir}/out.jsonl
+Recent events from its log (last 25):
+\`\`\`
+${tail.slice(0, 3000)}
+\`\`\`
 
-Determine the root cause (feedback loop? confused about scope? waiting on input? erroring repeatedly?). Then write to ${rcaPath}:
+Its session file lives at ${implDir}/session/ but DO NOT read it in full — reason from the prompt + events above.
+
+Write ${rcaPath} containing exactly:
 # RCA
 ## Root cause
 <one clear paragraph>
 ## Evidence
 - concrete events/commands showing the loop
 ## Proposed fix
-<exact steer message for the implementer, one line starting with "STEER:" the pipeline will forward it verbatim>
+<exact steer message for the implementer, one line starting with "STEER:" — the pipeline forwards it verbatim>
 
-Keep it short and concrete.`
+Keep it short (under 250 words) and concrete. Do not use other tools beyond the write needed to produce ${rcaPath}.`
     const { id } = await spawnBgAgent({
       prompt,
       model: p.model,
