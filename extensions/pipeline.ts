@@ -303,13 +303,24 @@ Keep it short (under 250 words) and concrete. Do not use other tools beyond the 
       const m = content.match(/STEER:\s*(.+)/)
       if (m?.[1]) steerMsg = m[1].trim()
     } catch {}
-    emit(`[pipeline ${p.id}] watchdog: implementer was stuck; RCA complete${steerMsg ? ` → steering implementer: "${steerMsg.slice(0, 160)}"` : ""}`)
-    if (steerMsg && p.implId) {
-      await runTmux(["send-keys", "-t", `pi-bg-${p.implId}`, "-l", JSON.stringify({ type: "steer", message: steerMsg })])
-      await runTmux(["send-keys", "-t", `pi-bg-${p.implId}`, "Enter"])
+    const implAlive = p.implId
+      ? await runTmux(["has-session", "-t", `pi-bg-${p.implId}`]).then(() => true).catch(() => false)
+      : false
+    if (implAlive && steerMsg && p.implId) {
+      await runTmux(["send-keys", "-t", `pi-bg-${p.implId}`, "-l", JSON.stringify({ type: "steer", message: steerMsg })]).catch(() => {})
+      await runTmux(["send-keys", "-t", `pi-bg-${p.implId}`, "Enter"]).catch(() => {})
+      emit(`[pipeline ${p.id}] watchdog: implementer was stuck; RCA complete → steered: "${steerMsg.slice(0, 120)}"`)
+      log(p, `RCA done; steered implementer`)
+      p.phase = "implementing"
+    } else if (implAlive) {
+      emit(`[pipeline ${p.id}] watchdog: implementer was stuck; RCA found no steerable fix — continuing to watch`)
+      log(p, "RCA done; no steer line; continuing to watch")
+      p.phase = "implementing"
+    } else {
+      p.phase = "failed"
+      log(p, "RCA done but implementer process died — pipeline failed")
+      emit(`[pipeline ${p.id}] failed: implementer died while stuck (see rca.md)`)
     }
-    p.phase = "implementing"
-    log(p, `RCA done; back to implementing${steerMsg ? " (steered)" : ""}`)
   }
 
   async function startReview(p: Pipeline): Promise<void> {
