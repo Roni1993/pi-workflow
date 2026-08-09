@@ -5,6 +5,7 @@
   "license": "MIT",
   "keywords": ["pi-package"],
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": ["./extensions"],
+    "skills": ["./skills"]
   }
 }
