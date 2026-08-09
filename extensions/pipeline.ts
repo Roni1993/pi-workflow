@@ -24,6 +24,7 @@ interface Pipeline {
   dir: string
   implId?: string
   implWorkDir?: string
+  implPrompt?: string
   reviewers: string[]
   fixerId?: string
   rcaId?: string
@@ -242,7 +243,7 @@ export default function pipelineExtension(pi: ExtensionAPI) {
     const implDir = path.join(os.homedir(), ".pi", "agent", "bg", p.implId ?? "")
     const prompt = `Investigate why a background implementation agent appears stuck.
 
-Implementer prompt: ${p.prompt.slice(0, 800)}
+Implementer prompt: ${(p.implPrompt ?? p.statement).slice(0, 800)}
 
 Its session file: ${implDir}/session/
 Recent activity (tail of event log): the file ${implDir}/out.jsonl
@@ -558,6 +559,7 @@ First expand the plan at ${p.planPath} (structure: goal / scope / files / plan /
         })
         p.implId = implId
         p.implWorkDir = implCwd
+        p.implPrompt = implPrompt
         p.phase = "implementing"
         log(p, `implementer spawned (${implId}) at ${implCwd}`)
         await savePipelines(pipes)
