@@ -46,6 +46,15 @@ function runTmux(args: string[]): Promise<string> {
   })
 }
 
+function execFileAsync(cmd: string, args: string[], opts?: { cwd?: string }): Promise<{ stdout: string }> {
+  return new Promise((resolve, reject) => {
+    execFile(cmd, args, { timeout: 30_000, ...opts }, (err, stdout) => {
+      if (err) reject(new Error(String(stdout || err.message)))
+      else resolve({ stdout: String(stdout) })
+    })
+  })
+}
+
 async function readJson<T>(file: string, fallback: T): Promise<T> {
   try {
     return JSON.parse(await fs.readFile(file, "utf8")) as T
@@ -135,14 +144,39 @@ function parseSpawnArgs(args: string): { model?: string; tools?: string; prompt:
   return { model, tools, prompt }
 }
 
+async function isJjRepo(cwd: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileAsync("jj", ["root"], { cwd })
+    return stdout.trim().length > 0
+  } catch {
+    return false
+  }
+}
+
+async function setupJjWorkspace(cwd: string, workDir: string): Promise<string> {
+  await fs.rm(workDir, { recursive: true, force: true })
+  await fs.mkdir(workDir, { recursive: true })
+  try {
+    await execFileAsync("jj", ["workspace", "add", workDir], { cwd })
+    return workDir
+  } catch {
+    return cwd
+  }
+}
+
 async function spawnAgent(ctx: ExtensionCommandContext, args: string): Promise<string> {
   const { model, tools, prompt } = parseSpawnArgs(args)
   const id = genId(prompt)
   const dir = path.join(BG_DIR, id)
   const sessionDir = path.join(dir, "session")
   const session = `pi-bg-${id}`
+  const workDir = path.join(dir, "work")
   await fs.mkdir(sessionDir, { recursive: true })
-  await fs.mkdir(path.join(dir, "work"), { recursive: true })
+  await fs.mkdir(workDir, { recursive: true })
+
+  const agentCwd = (await isJjRepo(ctx.cwd))
+    ? await setupJjWorkspace(ctx.cwd, workDir)
+    : ctx.cwd
 
   const modelId =
     model ??
@@ -152,16 +186,16 @@ async function spawnAgent(ctx: ExtensionCommandContext, args: string): Promise<s
   const rpcArgs = [`--mode`, `rpc`, `--session-dir`, sessionDir, `--name`, id]
   if (modelId) rpcArgs.push("--model", modelId)
   if (tools) rpcArgs.push("--tools", tools)
-  const shellCmd = `${piBin} ${rpcArgs.map((a) => JSON.stringify(a)).join(" ")} > out.jsonl 2> err.log`
+  const shellCmd = `${piBin} ${rpcArgs.map((a) => JSON.stringify(a)).join(" ")} > ${JSON.stringify(path.join(dir, "out.jsonl"))} 2> ${JSON.stringify(path.join(dir, "err.log"))}`
 
-  await runTmux(["new-session", "-d", "-s", session, "-c", dir, shellCmd])
+  await runTmux(["new-session", "-d", "-s", session, "-c", agentCwd, shellCmd])
 
   const agent: BgAgent = {
     id,
     tmux: session,
     dir,
     sessionDir,
-    cwd: ctx.cwd,
+    cwd: agentCwd,
     model: modelId,
     prompt,
     createdAt: new Date().toISOString(),
@@ -287,8 +321,8 @@ export default function bgExtension(pi: ExtensionAPI) {
               emit(`${id} already running.\ntmux attach -t ${a.tmux}\nsession: ${a.sessionDir}`)
             } else {
               const piBin = getPiBinary()
-              const shellCmd = `${piBin} --mode rpc --session-dir ${a.sessionDir} --name ${id} --model ${a.model} > out.jsonl 2> err.log`
-              await runTmux(["new-session", "-d", "-s", a.tmux, "-c", a.dir, shellCmd])
+              const shellCmd = `${piBin} --mode rpc --session-dir ${a.sessionDir} --name ${id} --model ${a.model} > ${JSON.stringify(path.join(a.dir, "out.jsonl"))} 2> ${JSON.stringify(path.join(a.dir, "err.log"))}`
+              await runTmux(["new-session", "-d", "-s", a.tmux, "-c", a.cwd || a.dir, shellCmd])
               a.status = "running"
               await writeIndex(index)
               emit(`resumed ${id} (history preserved in ${a.sessionDir})\ntmux attach -t ${a.tmux}`)
