@@ -1,5 +1,5 @@
 import * as fs from "node:fs/promises"
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, statSync } from "node:fs"
 import * as path from "node:path"
 import * as os from "node:os"
 import { execFile } from "node:child_process"
@@ -27,6 +27,7 @@ interface Pipeline {
   reviewers: string[]
   fixerId?: string
   rcaId?: string
+  lastRcaAt?: number
   reviewRound: number
   maxReviewRounds: number
   maxReviewers: number
@@ -179,17 +180,7 @@ function agentSettled(dir: string): boolean {
 
 function agentLastActivity(dir: string): number {
   try {
-    const content = readFileSync(path.join(dir, "out.jsonl"), "utf8")
-    const lines = content.split("\n").filter(Boolean)
-    for (let i = lines.length - 1; i >= 0; i--) {
-      try {
-        const e = JSON.parse(lines[i])
-        if (["message_update", "tool_execution_start", "tool_execution_end", "agent_start", "agent_end"].includes(e.type)) {
-          return Date.parse(e.timestamp ?? "") || Date.now()
-        }
-      } catch {}
-    }
-    return Date.now()
+    return statSync(path.join(dir, "out.jsonl")).mtimeMs
   } catch {
     return Date.now()
   }
@@ -379,7 +370,11 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
             p.reviewRound = 0
             log(p, "implementer settled; starting review")
             await startReview(p)
-          } else if (Date.now() - agentLastActivity(implDir) > p.stuckMs) {
+          } else if (
+            (!p.lastRcaAt || Date.now() - p.lastRcaAt > p.stuckMs * 2) &&
+            Date.now() - agentLastActivity(implDir) > p.stuckMs
+          ) {
+            p.lastRcaAt = Date.now()
             log(p, "watchdog: implementer stuck (no activity); spawning RCA")
             await startRca(p)
           }
