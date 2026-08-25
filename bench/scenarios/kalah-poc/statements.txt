@@ -1,0 +1,16 @@
+Implement a Kalah (Mancala) game module in a zero-dependency Node.js COMMONJS (require-able; do not set "type": "module") repo, matching this specification:
+
+RULES (standard 6-stone Kalah): 2 players; each player has 6 houses + 1 store; 6 stones in each house at start (72 total). On a turn, a player takes all stones from one of their non-empty houses and sows them one per pit counter-clockwise in a ring of 14 pits, skipping the opponent's store. If the last stone lands in the mover's own store, the mover gets an extra turn. If the last stone lands in an empty own house, the mover captures the stones in the opposite house plus the seeding stone into their store (only when the opposite house is non-empty). When one player's 6 houses are all empty after the move, the game ends; the player who still has stones collects their own remaining stones into their own store. The player with more stones in their store wins; equal stores is a draw.
+
+DELIVERABLES (all new files in repo root):
+- src/rules.js: pure CommonJS module, no stateful mutation; must export (at least): PLAYER_ONE (1), PLAYER_TWO (2), DRAW (0), STONES_PER_HOUSE (6), createBoard(), createGame() (returns {board, currentPlayer}), housesOf(player), storeOf(player), otherPlayer(player), absoluteHouse(player, house), isValidMove(board, player, house), applyMove(board, player, house) which throws on invalid moves and returns a NEW state { board, currentPlayer, extraTurn, capture, gameOver, winner }. Board model: 14-pit array; pits 0-5 = Player 1 houses, 6 = P1 store, 7-12 = Player 2 houses, 13 = P2 store.
+- src/cli.js: executable REPL (human vs a simple heuristic bot): prints the board (6 houses per player with stores), accepts a house index (1-6) for the human's turn, plays the bot automatically on its turn, rejects invalid/empty house picks with a re-prompt, and announces capture, extra turn, game over and winner. Usable as: node src/cli.js
+- test/rules.test.js: node:test unit tests covering: fresh board layout (6+6 houses, 6 stones each, stores 0, Player 1 moves first), sowing skewers the opponent store, extra turn on landing in own store, capture on landing in empty own house, empty-house move invalid, game ends when a side is empty with the remaining stones collected by the owner, winner incl. the draw case.
+- package.json: name kalah-poc, scripts.test = node --test, no dependencies, no build step, and NO "type" key.
+
+ACCEPTANCE:
+1. npm test passes (all cases above present and green).
+2. node src/cli.js starts an interactive game; a full game can be played against the bot.
+3. No dependencies added; code stays small and simple (no over-engineering).
+
+Plan: first expand the plan at the planPath given (goal/scope/files/plan/acceptance/verification), then implement, run npm test, and fix until green. When done, write a notes.txt summary of what was implemented and how it was verified.

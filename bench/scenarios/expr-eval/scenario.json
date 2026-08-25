@@ -1,0 +1,10 @@
+{
+  "id": "expr-eval",
+  "repo": "https://github.com/Roni1993/expr-eval-poc.git",
+  "statements": "statements.txt",
+  "hiddenDir": ".",
+  "hiddenTests": ["eval.hidden.test.js"],
+  "capsMinutes": { "A": 60, "B": 90 },
+  "pipBin": null,
+  "notes": "targets src/eval.js API: tokenize/toRpn/evaluate"
+}

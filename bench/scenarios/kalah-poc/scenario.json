@@ -1,0 +1,10 @@
+{
+  "id": "kalah-poc",
+  "repo": "https://github.com/Roni1993/kalah-poc.git",
+  "statements": "statements.txt",
+  "hiddenDir": ".",
+  "hiddenTests": ["kalah.hidden.test.js"],
+  "capsMinutes": { "A": 60, "B": 90 },
+  "pipBin": null,
+  "notes": "targets src/rules.js API: createGame/applyMove/isValidMove/housesOf/storeOf/otherPlayer/absoluteHouse"
+}

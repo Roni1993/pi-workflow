@@ -1,0 +1,24 @@
+Implement an arithmetic expression evaluator in a zero-dependency Node.js COMMONJS (require-able; do not set "type": "module") repo, following this specification:
+
+FEATURES: evaluate arithmetic expressions with operators + - * / ^ (power, right-associative), parentheses, unary minus, decimal literals, and whitespace tolerance. Tokenize -> shunting-yard to postfix (RPN) -> evaluate. Pure logic — no CLI, no IO.
+
+API CONTRACT: src/eval.js (CommonJS) exports:
+- tokenize(expr) -> array of plain token objects with { type: "number"|"op"|"paren", value: number|string }
+- toRpn(tokens) -> array of the same token shapes in postfix order
+- evaluate(expr) -> number; throws Error on invalid input
+
+SEMANTICS: precedence * / > + -; ^ is right-associative and binds tighter than unary minus (-2^2 == -4); parentheses override; unary minus may appear before a number, before a paren, or after an operator (5*-3, 2^-3, -(2+3)); decimal numbers like 3, 3.14, .5, 5. are accepted; whitespace is ignored.
+
+ERRORS (always by throwing an Error): empty expression, unbalanced parentheses, invalid characters, consecutive binary operators (2++3), dangling operators (3 +), multiple dots (1.2.3), and division by zero (message must mention "division by zero").
+
+DELIVERABLES (all new files in repo root):
+- src/eval.js as specified above
+- test/eval.test.js: node:test unit tests covering: precedence (2+3*4 = 14), parentheses ((2+3)*4 = 20), right-assoc power (2^3^2 = 512), unary minus and power binding (-2^2 = -4), unary minus positions (-(2+3) = -5, 5*-3 = -15, 2^-3 = 0.125), decimals (0.5+0.25 = 0.75), division (7/2 = 3.5), division by zero => throws, unbalanced parens => throws, 2++3 => throws, empty => throws, whitespace tolerated ( 3 + 4 = 7)
+- package.json: name expr-eval-poc, scripts.test = node --test, no dependencies, no build step, and NO "type" key.
+
+ACCEPTANCE:
+1. npm test passes (all cases above present and green).
+2. node -e "console.log(require('./src/eval').evaluate('1+2*3'))" prints 7.
+3. No dependencies added; code stays small and simple (no over-engineering).
+
+Plan: first expand the plan at the planPath given (goal/scope/files/plan/acceptance/verification), then implement, run npm test, and fix until green. When done, write a notes.txt summary of what was implemented and how it was verified.
