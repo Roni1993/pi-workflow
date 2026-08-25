@@ -443,7 +443,13 @@ function spawnPi(cwd, sessionDir, name, model, runDir, logline) {
 
 // ---------- main ----------
 async function main() {
-  // API key: extracted from ~/.local/share/opencode/auth.json (opencode-go type=api)
+  // API key lookup order: OPENCODE_API_KEY env -> bench/.key (gitignored) -> auth.json
+  if (!process.env.OPENCODE_API_KEY) {
+    const keyFile = path.join(HERE, ".key")
+    if (existsSync(keyFile)) {
+      try { process.env.OPENCODE_API_KEY = readFileSync(keyFile, "utf8").trim() } catch {}
+    }
+  }
   if (!process.env.OPENCODE_API_KEY) {
     const authP = path.join(HOME, ".local", "share", "opencode", "auth.json")
     try {
