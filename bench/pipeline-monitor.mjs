@@ -25,15 +25,10 @@ function readJson(file, dflt) {
   try { return JSON.parse(readFileSync(file, "utf8")) } catch { return dflt }
 }
 function writeJson(file, data) {
-  const tmp = `${file}.tmp`
+  const tmp = `${file}.tmp.${process.pid}`
   writeFileSync(tmp, JSON.stringify(data, null, 2))
-  try {
-    const stat = spawnSync("mv", ["-f", tmp, file])
-    if (!stat.ok) throw new Error("mv failed")
-  } catch {
-    const r = runCmd("mv", ["-f", tmp, file])
-    if (!r.ok) throw new Error(r.stderr)
-  }
+  const r = runCmd("mv", ["-f", tmp, file])
+  if (!r.ok) throw new Error(r.stderr)
 }
 
 function piBin() {
@@ -291,7 +286,11 @@ async function tick() {
         case "implementing": {
           if (!p.implId) break
           const implDir = path.join(HOME, ".pi", "agent", "bg", p.implId)
-          if (agentSettled(implDir)) {
+          const implAlive = runCmd("tmux", ["has-session", "-t", `pi-bg-${p.implId}`]).ok
+          if (!implAlive && Date.now() - agentLastActivity(implDir) > 120_000) {
+            p.phase = "failed"
+            log(p, `implementer session gone (${p.implId}); marking failed`)
+          } else if (agentSettled(implDir)) {
             p.phase = "reviewing"
             p.reviewRound = 0
             log(p, "implementer settled; starting review")
