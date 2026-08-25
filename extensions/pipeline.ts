@@ -103,14 +103,14 @@ async function isJjRepo(cwd: string): Promise<boolean> {
   }
 }
 
-async function setupJjWorkspace(cwd: string, workDir: string): Promise<string> {
+async function setupJjWorkspace(cwd: string, workDir: string, wsName: string): Promise<string> {
   await fs.rm(workDir, { recursive: true, force: true })
   await fs.mkdir(workDir, { recursive: true })
   try {
-    await execFileAsync("jj", ["workspace", "add", workDir], { cwd })
+    await execFileAsync("jj", ["workspace", "add", "--name", wsName, workDir], { cwd })
     return workDir
-  } catch {
-    return cwd
+  } catch (e) {
+    throw new Error(`jj workspace add failed (${wsName}): ${e instanceof Error ? e.message : String(e)}`)
   }
 }
 
@@ -132,7 +132,7 @@ async function spawnBgAgent(opts: SpawnOpts): Promise<{ id: string; dir: string;
   await fs.mkdir(workDir, { recursive: true })
 
   const agentCwd = opts.jjIsolation && (await isJjRepo(opts.cwd))
-    ? await setupJjWorkspace(opts.cwd, workDir)
+    ? await setupJjWorkspace(opts.cwd, workDir, `ws-${id}`)
     : opts.cwd
 
   const piBin = getPiBinary()
