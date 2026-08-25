@@ -483,8 +483,9 @@ async function spawnDriver(tsName, cwd, sessionDir, name, model, runDir, logline
 }
 
 async function driverAlive(tsName) {
-  const r = await runCmd("tmux", ["has-session", "-t", tsName])
-  return r.ok
+  // tmux session can outlive the pi process — check the pane's dead flag.
+  const r = await runCmd("tmux", ["list-panes", "-t", tsName, "-F", "#{pane_dead}"])
+  return r.ok && r.stdout.trim() !== "1"
 }
 
 async function driverSend(tsName, payload) {

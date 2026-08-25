@@ -17,6 +17,7 @@ const STANDARDS = path.join(os.homedir(), ".pi", "agent", "git", "github.com", "
 const MONITOR_MS = 5_000
 
 interface Pipeline {
+  cwd?: string
   id: string
   statement: string
   phase: "planning" | "implementing" | "stuck" | "reviewing" | "fixing" | "clean" | "done" | "failed"
@@ -400,6 +401,27 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
     for (const p of Object.values(pipes)) {
       const before = p.phase
       switch (p.phase) {
+        case "planning": {
+          // Self-heal: the /pipeline handler can die mid-command (pi RPC process death),
+          // stranding a record in "planning" before the implementer was spawned.
+          if (!p.implId && Date.now() - new Date(p.createdAt ?? 0).getTime() > 90_000) {
+            const implPrompt = p.implPrompt
+              ?? `You are the implementation agent. Task: ${p.statement}\n\nFirst expand the plan at ${p.planPath} (structure: goal / scope / files / plan / acceptance / verification), then implement it in this workspace. Work autonomously and stop when the acceptance criteria are met. Summarize what you did and how it was verified. Keep the change minimal and clean.`
+            const { id: implId, cwd: implCwd } = await spawnBgAgent({
+              prompt: implPrompt,
+              model: p.model,
+              cwd: p.cwd ?? os.homedir(),
+              label: "impl",
+              jjIsolation: true,
+            })
+            p.implId = implId
+            p.implWorkDir = implCwd
+            p.implPrompt = implPrompt
+            p.phase = "implementing"
+            log(p, `planning-heal: handler died; implementer spawned (${implId}) at ${implCwd}`)
+          }
+          break
+        }
         case "implementing": {
           if (!p.implId) break
           const implDir = path.join(os.homedir(), ".pi", "agent", "bg", p.implId)
@@ -570,6 +592,7 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
           const p: Pipeline = {
             id, statement, phase: "planning", model, planPath, dir, reviewers: [],
             reviewRound: 0, maxReviewRounds: maxRounds, maxReviewers, stuckMs, doPr,
+            cwd: ctx.cwd,
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), log: [],
           }
           log(p, "grilled user on contracts & BDD")
@@ -584,6 +607,7 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
           const p: Pipeline = {
             id, statement, phase: "planning", model, planPath, dir, reviewers: [],
             reviewRound: 0, maxReviewRounds: maxRounds, maxReviewers, stuckMs, doPr,
+            cwd: ctx.cwd,
             createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), log: [],
           }
           log(p, "no-grill: starting directly")
