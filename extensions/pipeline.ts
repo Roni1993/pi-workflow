@@ -11,6 +11,7 @@ import { Text } from "@earendil-works/pi-tui"
 
 const WORKFLOW_DIR = path.join(os.homedir(), ".pi", "agent", "pi-workflow")
 const PIPELINES = path.join(WORKFLOW_DIR, "pipelines", "index.json")
+const LOCK_DIR = path.join(WORKFLOW_DIR, "tick.lock")
 const BG_INDEX = path.join(os.homedir(), ".pi", "agent", "bg", "index.json")
 const STANDARDS = path.join(os.homedir(), ".pi", "agent", "git", "github.com", "Roni1993", "pi-workflow", "docs", "standards.md")
 const MONITOR_MS = 5_000
@@ -461,14 +462,25 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
   }
 
   const monitor = setInterval(() => {
-    tick().catch((e) => {
-      try {
-        appendFileSync(
-          path.join(WORKFLOW_DIR, "pipeline-debug.log"),
-          `[${new Date().toISOString()}] tick error: ${e instanceof Error ? e.stack ?? e.message : String(e)}\n`,
-        )
-      } catch {}
-    })
+    try {
+      fs.mkdirSync(LOCK_DIR)
+    } catch {
+      return
+    }
+    tick()
+      .catch((e) => {
+        try {
+          appendFileSync(
+            path.join(WORKFLOW_DIR, "pipeline-debug.log"),
+            `[${new Date().toISOString()}] tick error: ${e instanceof Error ? e.stack ?? e.message : String(e)}\n`,
+          )
+        } catch {}
+      })
+      .finally(() => {
+        try {
+          fs.rmSync(LOCK_DIR, { recursive: true, force: true })
+        } catch {}
+      })
   }, MONITOR_MS)
   monitor.unref?.()
 
