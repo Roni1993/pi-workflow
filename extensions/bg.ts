@@ -181,7 +181,7 @@ async function spawnAgent(ctx: ExtensionCommandContext, args: string): Promise<s
   const modelId =
     model ??
     (ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined) ??
-    "opencode-go/deepseek-v4-flash"
+    "opencode-go/deepseek-v4-pro"
   const piBin = getPiBinary()
   const rpcArgs = [`--mode`, `rpc`, `--session-dir`, sessionDir, `--name`, id]
   if (modelId) rpcArgs.push("--model", modelId)

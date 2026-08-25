@@ -517,7 +517,7 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
 
         let noGrill = false
         let doPr = false
-        let model = "opencode-go/deepseek-v4-flash"
+        let model = "opencode-go/deepseek-v4-pro"
         let maxReviewers = 2
         let maxRounds = 3
         let stuckMs = 120_000

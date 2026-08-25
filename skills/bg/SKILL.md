@@ -26,8 +26,8 @@ working after the interactive session closes.
 ## Orchestration guidance
 
 - Spawn parallel independent agents for research/implementation; give each a self-contained task.
-- Pick models per agent: a cheap researcher (`opencode-go/kimi-k2.6`) vs implementer
-  (`opencode-go/deepseek-v4-flash`) vs orchestrator (`kimi-k3`).
+- Pick models per agent: cheap researcher/orchestrator (`opencode-go/glm-5.3`) vs
+  implementer (`opencode-go/deepseek-v4-pro`).
 - Agents settle → `result.md` written + `[bg] <id> settled` notification in the primary session.
 - Steer a wandering agent immediately rather than killing it.
 - In a colocated jj repo, each agent already runs in its own `jj workspace` — do not add another.
