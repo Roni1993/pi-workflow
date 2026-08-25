@@ -270,6 +270,7 @@ async function runOne(sc, model, arm, n, ctx) {
 
   try {
     // 1) fresh clone + jj init (isolation; harmless if it fails)
+    rmSync(path.join(runDir, "repo"), { recursive: true, force: true }) // resume-safe: never let a stale clone block re-runs
     let r = await runCmd("git", ["clone", "-q", "--depth", "1", sc.repo, path.join(runDir, "repo")])
     if (!r.ok) throw new Error(`clone failed: ${r.stderr}`)
     const repoDir = path.join(runDir, "repo")
