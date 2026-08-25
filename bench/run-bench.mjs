@@ -245,11 +245,18 @@ function findPipeline(before) {
   for (const k of Object.keys(pipes)) {
     if (before.includes(k)) continue
     const rec = pipes[k]
-    if (rec && ["implementing", "reviewing", "fixing", "clean", "failed", "cancelled"].includes(rec.phase)) {
+    if (rec && ["planning", "implementing", "reviewing", "fixing", "clean", "failed", "cancelled"].includes(rec.phase)) {
       return { rec, id: k }
     }
   }
   return null
+}
+
+const ABANDON_STALE_PLANNING_MS = 10 * 60_000
+async function isStalePlanning(rec) {
+  if (rec.phase !== "planning") return false
+  const age = Date.now() - new Date(rec.createdAt ?? 0).getTime()
+  return age > ABANDON_STALE_PLANNING_MS
 }
 
 // ---------- single run ----------
@@ -306,11 +313,16 @@ async function runOne(sc, model, arm, n, ctx) {
       const found = findPipeline(before)
       if (found) { pipe = found.rec; pipeId = found.id }
       // keep a monitor alive: respawn the pi driver if it died mid-run
-      if (pipe && !["clean", "failed", "cancelled"].includes(pipe.phase) && drive.proc.exitCode !== null && respawns < 5) {
+      if (drive.proc.exitCode !== null && respawns < 5 && !(pipe && ["clean", "failed", "cancelled"].includes(pipe.phase))) {
         respawns += 1
         logline(`driver pi died; respawning monitor (#${respawns})`)
         drive = spawnPi(repoDir, sessionDir, runId, model, runDir, logline)
         await sleep(3_000)
+      }
+      // abandoned: pipeline stuck in planning (driver died mid /pipeline) > 10 min
+      if (pipe && (await isStalePlanning(pipe))) {
+        deadlineHit = true
+        break
       }
       if (!pipe) {
         if (Date.now() > deadline) { deadlineHit = true; break }
@@ -321,17 +333,34 @@ async function runOne(sc, model, arm, n, ctx) {
     }
 
     if (deadlineHit) {
-      logline(`deadline exceeded (${sc.capsMinutes[arm]} min); canceling ${pipeId}`)
-      try { drive.proc.stdin.write(JSON.stringify({ id: "req-c", type: "prompt", message: `/pipeline cancel ${pipeId}` }) + "\n") } catch {}
-      await sleep(30_000)
-      const rec = pipeId ? await readPipe(pipeId) : null
-      if (rec) pipe = rec
-      if (pipe && !["failed", "cancelled"].includes(pipe.phase)) {
-        for (const aid of [pipe.implId, pipe.fixerId, pipe.rcaId, ...(pipe.reviewers ?? [])].filter(Boolean)) {
-          await runCmd("tmux", ["kill-session", "-t", `pi-bg-${aid}`]).catch(() => {})
+      const stale = pipe && pipe.phase === "planning"
+      logline(stale ? `planning stale > ${sc.capsMinutes[arm]}min? no -- >10min abandoned; marking failed (will re-queue)` : `deadline exceeded (${sc.capsMinutes[arm]} min); canceling ${pipeId}`)
+      if (!stale && pipeId) {
+        try { drive.proc.stdin.write(JSON.stringify({ id: "req-c", type: "prompt", message: `/pipeline cancel ${pipeId}` }) + "\n") } catch {}
+        await sleep(30_000)
+        const rec = await readPipe(pipeId)
+        if (rec) pipe = rec
+        if (pipe && !["failed", "cancelled"].includes(pipe.phase)) {
+          for (const aid of [pipe.implId, pipe.fixerId, pipe.rcaId, ...(pipe.reviewers ?? [])].filter(Boolean)) {
+            await runCmd("tmux", ["kill-session", "-t", `pi-bg-${aid}`]).catch(() => {})
+          }
+          logline("kill-session fallback done")
         }
-        logline("kill-session fallback done")
       }
+    }
+
+    if (deadlineHit && pipe && pipe.phase === "planning") {
+      // abandoned before the implementer spawned: not a real run result — do NOT mark done.
+      const recErr = { runId, scenario: sc.id, model, arm, n, startedAt, error: "planning-stuck: driver died mid /pipeline (will re-queue)" }
+      appendFileSync(recordPath, JSON.stringify(recErr) + "\n")
+      logline("recorded as planning-stuck error (not done)")
+      return null
+    }
+    if (deadlineHit && !pipe) {
+      const recErr = { runId, scenario: sc.id, model, arm, n, startedAt, error: "no pipeline record found (driver died early)" }
+      appendFileSync(recordPath, JSON.stringify(recErr) + "\n")
+      logline("recorded as driver-early-death error (not done)")
+      return null
     }
 
     pipe = pipeId ? await readPipe(pipeId) : pipe
