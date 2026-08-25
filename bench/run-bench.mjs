@@ -284,18 +284,21 @@ async function runOne(sc, model, arm, n, ctx) {
     await runCmd("jj", ["git", "init"], { cwd: repoDir })
     const repoState = await runCmd("git", ["rev-parse", "HEAD"], { cwd: repoDir })
 
-    // 2) spawn pi RPC driver process (hosts the pipeline monitor; stdin = RPC)
+    // 2) spawn pi RPC driver INSIDE tmux (pty stdin — pipe-stdin pi instances die intermittently;
+    //    tmux-hosted agents have been stable for hours). Prompt is re-sent until acknowledged.
     const sessionDir = path.join(runDir, "session")
     console.log(`[run] ${runId}: spawning pi driver (model=${model}, arm=${arm})`)
     const promptMsg = `/pipeline --no-grill ${arm === "A" ? "--reviewers 0 " : ""}--model ${model} ${stmt.trim()}`
+    const tsName = "pi-bench-" + sha(runId)
+    await runCmd("tmux", ["kill-session", "-t", tsName]).catch(() => {})
 
-    let drive = spawnPi(repoDir, sessionDir, runId, model, runDir, logline)
+    let drive = await spawnDriver(tsName, repoDir, sessionDir, runId, model, runDir, logline)
     let before = []
     try { before = Object.keys(JSON.parse(readFileSync(PIPELINES_IDX, "utf8"))) } catch {}
 
     await sleep(6_000)
-    drive.proc.stdin.write(JSON.stringify({ id: "req-1", type: "prompt", message: promptMsg }) + "\n")
-
+    const promptPayload = { id: "req-1", type: "prompt", message: promptMsg }
+    await driverSend(tsName, promptPayload)
     for (let i = 0; i < 20; i++) {
       await sleep(2_000)
       const out = existsSync(path.join(runDir, "out.jsonl")) ? readFileSync(path.join(runDir, "out.jsonl"), "utf8") : ""
@@ -312,12 +315,16 @@ async function runOne(sc, model, arm, n, ctx) {
       await sleep(20_000)
       const found = findPipeline(before)
       if (found) { pipe = found.rec; pipeId = found.id }
-      // keep a monitor alive: respawn the pi driver if it died mid-run
-      if (drive.proc.exitCode !== null && respawns < 5 && !(pipe && ["clean", "failed", "cancelled"].includes(pipe.phase))) {
+      // keep a monitor alive: respawn the pi driver if it died; if the prompt was never
+      // acknowledged, the fresh driver gets the prompt re-sent.
+      const alive = await driverAlive(tsName)
+      if (!alive && respawns < 5 && !(pipe && ["clean", "failed", "cancelled"].includes(pipe.phase))) {
         respawns += 1
-        logline(`driver pi died; respawning monitor (#${respawns})`)
-        drive = spawnPi(repoDir, sessionDir, runId, model, runDir, logline)
+        const acked = existsSync(path.join(runDir, "out.jsonl")) && readFileSync(path.join(runDir, "out.jsonl"), "utf8").includes('"id":"req-1"')
+        logline(`driver pi dead; respawning (#${respawns})${acked ? "" : " + re-sending prompt"}`)
+        drive = await spawnDriver(tsName, repoDir, sessionDir, runId, model, runDir, logline)
         await sleep(3_000)
+        if (!acked) await driverSend(tsName, promptPayload)
       }
       // abandoned: pipeline stuck in planning (driver died mid /pipeline) > 10 min
       if (pipe && (await isStalePlanning(pipe))) {
@@ -334,9 +341,9 @@ async function runOne(sc, model, arm, n, ctx) {
 
     if (deadlineHit) {
       const stale = pipe && pipe.phase === "planning"
-      logline(stale ? `planning stale > ${sc.capsMinutes[arm]}min? no -- >10min abandoned; marking failed (will re-queue)` : `deadline exceeded (${sc.capsMinutes[arm]} min); canceling ${pipeId}`)
+      logline(stale ? `planning stale >10min abandoned; marking failed (will re-queue)` : `deadline exceeded (${sc.capsMinutes[arm]} min); canceling ${pipeId}`)
       if (!stale && pipeId) {
-        try { drive.proc.stdin.write(JSON.stringify({ id: "req-c", type: "prompt", message: `/pipeline cancel ${pipeId}` }) + "\n") } catch {}
+        await driverSend(tsName, { id: "req-c", type: "prompt", message: `/pipeline cancel ${pipeId}` }).catch(() => {})
         await sleep(30_000)
         const rec = await readPipe(pipeId)
         if (rec) pipe = rec
@@ -450,6 +457,7 @@ async function runOne(sc, model, arm, n, ctx) {
       }
     }
 
+    await runCmd("tmux", ["kill-session", "-t", tsName]).catch(() => {})
     appendFileSync(recordPath, JSON.stringify(record) + "\n")
     const done = JSON.parse(existsSync(ctx.statePath) ? readFileSync(ctx.statePath, "utf8") : "{}")
     done.done = { ...(done.done ?? {}), [runId]: true }
@@ -465,15 +473,23 @@ async function runOne(sc, model, arm, n, ctx) {
   }
 }
 
-function spawnPi(cwd, sessionDir, name, model, runDir, logline) {
-  const proc = spawn(piBin(), ["--mode", "rpc", "--session-dir", sessionDir, "--name", name, "--model", model], {
-    cwd,
-    stdio: ["pipe", "pipe", "pipe"],
-  })
-  proc.stdout.on("data", (d) => { try { appendFileSync(path.join(runDir, "out.jsonl"), d) } catch {} })
-  proc.stderr.on("data", (d) => { try { appendFileSync(path.join(runDir, "err.log"), d) } catch {} })
-  proc.on("exit", (c) => logline(`pi process exited code=${c}`))
-  return { proc }
+async function spawnDriver(tsName, cwd, sessionDir, name, model, runDir, logline) {
+  const out = path.join(runDir, "out.jsonl")
+  const err = path.join(runDir, "err.log")
+  const cmd = `${JSON.stringify(piBin())} --mode rpc --session-dir ${JSON.stringify(sessionDir)} --name ${JSON.stringify(name)} --model ${JSON.stringify(model)} > ${JSON.stringify(out)} 2> ${JSON.stringify(err)}`
+  const r = await runCmd("tmux", ["new-session", "-d", "-s", tsName, "-c", cwd, cmd])
+  if (!r.ok) logline(`tmux driver spawn failed: ${r.stderr.slice(0, 120)}`)
+  return { ts: tsName }
+}
+
+async function driverAlive(tsName) {
+  const r = await runCmd("tmux", ["has-session", "-t", tsName])
+  return r.ok
+}
+
+async function driverSend(tsName, payload) {
+  await runCmd("tmux", ["send-keys", "-t", tsName, "-l", JSON.stringify(payload)])
+  await runCmd("tmux", ["send-keys", "-t", tsName, "Enter"])
 }
 
 // ---------- main ----------
