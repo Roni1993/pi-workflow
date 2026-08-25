@@ -252,7 +252,7 @@ function findPipeline(before) {
   return null
 }
 
-const ABANDON_STALE_PLANNING_MS = 10 * 60_000
+const ABANDON_STALE_PLANNING_MS = 3 * 60_000
 async function isStalePlanning(rec) {
   if (rec.phase !== "planning") return false
   const age = Date.now() - new Date(rec.createdAt ?? 0).getTime()
@@ -598,6 +598,8 @@ async function main() {
       if (!item) return
       const r = await runOne(item.sc, item.model, item.arm, item.n, ctx)
       if (r) results.push(r)
+      else if ((item.attempts ?? 0) < 1) queue.push({ ...item, attempts: (item.attempts ?? 0) + 1 })
+      else console.log(`[skip] ${item.runId}: retry limit reached`)
     }
   }
   const workers = []
