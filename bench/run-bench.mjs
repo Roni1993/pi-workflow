@@ -412,7 +412,12 @@ async function runOne(sc, model, arm, n, ctx) {
       }
 
       record.hiddenTests = await scoreHidden(sc, art, runDir)
-      record.judge = await judge(sc, art, record.hiddenTests, ctx.judgeModel)
+      if (ctx.noJudge) {
+        record.judge = null
+        record.judgePending = true
+      } else {
+        record.judge = await judge(sc, art, record.hiddenTests, ctx.judgeModel)
+      }
     }
 
     appendFileSync(recordPath, JSON.stringify(record) + "\n")
@@ -468,17 +473,48 @@ async function main() {
   const outdir = arg("outdir", path.join(HERE, "results"))
   const judgeModel = arg("judge-model", DEFAULT_JUDGE)
   const probeOnly = arg("probe-only", false)
+  const judgeOnly = arg("judge-only", false)
+  const noJudge = arg("no-judge", false)
   const maxRuns = arg("max-runs", null)
   mkdirSync(outdir, { recursive: true })
   const statePath = path.join(outdir, "state.json")
   const state = existsSync(statePath) ? JSON.parse(readFileSync(statePath, "utf8")) : { done: {}, queue: [] }
+
+  if (judgeOnly) {
+    // Phase 2: judge every run record that is missing a score (idempotent, resumes).
+    const resultsPath = path.join(outdir, "results.jsonl")
+    const records = existsSync(resultsPath)
+      ? readFileSync(resultsPath, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l))
+      : []
+    if (!records.length) { console.error(`no records in ${resultsPath}`); return }
+    let scored = 0
+    for (const rec of records) {
+      rec.error = undefined
+      if (rec.judge && rec.judge.score != null) continue
+      const sc = loadScenario(rec.scenario)
+      const art = path.join(outdir, "runs", rec.runId, "artifact")
+      if (!existsSync(art)) {
+        console.log(`[skip] ${rec.runId}: artifact missing (clean outdir? run was recorded before? )`)
+        continue
+      }
+      const hidden = rec.hiddenTests ?? { tests: "-", pass: "-", fail: "-" }
+      rec.judge = await judge(sc, art, hidden, judgeModel)
+      rec.judgePending = false
+      rec.judgedAt = new Date().toISOString()
+      scored += 1
+      console.log(`[judge] ${rec.runId} score=${rec.judge.score ?? "ERR"} ${rec.judge.error ?? ""}`)
+    }
+    writeFileSync(resultsPath, records.map((r) => JSON.stringify(r)).join("\n") + "\n")
+    console.log(`judged ${scored}/${records.length} records`)
+    return
+  }
 
   const models = modelsArg ? modelsArg.split(",").map((s) => s.trim()) : DEFAULT_MODELS
   const scenarios = scenarioId === "all"
     ? ["kalah-poc", "expr-eval"].map(loadScenario)
     : [loadScenario(scenarioId)]
 
-  const ctx = { outdir, statePath, judgeModel }
+  const ctx = { outdir, statePath, judgeModel, noJudge }
   ctx.piVersion = (await runCmd(piBin(), ["--version"])).stdout.trim()
   ctx.extCommit = (await runCmd("git", ["rev-parse", "--short", "HEAD"], { cwd: path.resolve(HERE, "..") })).stdout.trim()
 

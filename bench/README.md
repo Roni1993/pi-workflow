@@ -65,11 +65,8 @@ bench/run-inhibited.sh --cap 4          # blocks suspend for the whole run
 - Resume: any interrupted run re-reads `state.json` and skips finished `runId`s.
 - Hard caps per run: arm A 60 min, arm B 90 min → `/pipeline cancel` + kill-session
   fallback, recorded as a `cancelled` phase.
-- API key: benchmark spends should run on the **dedicated benchmark key** in
-  `bench/.key` (gitignored — never the shared/auth.json key). Lookup order:
-  `OPENCODE_API_KEY` env → `bench/.key` → `~/.local/share/opencode/auth.json` as
-  fallback. The `.key` file is created once:
-  `printf '<your-opencode-go-key>\n' > bench/.key`.
+- API key: taken from `~/.local/share/opencode/auth.json` (`opencode-go` `type=api`)
+  or `OPENCODE_API_KEY` if already set.
 
 ## Results schema
 
