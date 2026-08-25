@@ -66,7 +66,9 @@ async function readJson<T>(file: string, fallback: T): Promise<T> {
 
 async function writeJson(file: string, data: unknown): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true })
-  await fs.writeFile(file, JSON.stringify(data, null, 2))
+  const tmp = `${file}.tmp`
+      await fs.writeFile(tmp, JSON.stringify(data, null, 2))
+      await fs.rename(tmp, file)
 }
 
 function execFileAsync(cmd: string, args: string[], opts?: { cwd?: string; timeout?: number }): Promise<{ stdout: string }> {

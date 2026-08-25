@@ -69,7 +69,9 @@ async function readIndex(): Promise<Record<string, BgAgent>> {
 
 async function writeIndex(index: Record<string, BgAgent>): Promise<void> {
   await fs.mkdir(BG_DIR, { recursive: true })
-  await fs.writeFile(INDEX, JSON.stringify(index, null, 2))
+  const tmp = `${INDEX}.tmp`
+  await fs.writeFile(tmp, JSON.stringify(index, null, 2))
+  await fs.rename(tmp, INDEX)
 }
 
 async function sendRpc(session: string, payload: unknown): Promise<void> {
