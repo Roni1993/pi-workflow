@@ -494,6 +494,11 @@ async function driverSend(tsName, payload) {
 }
 
 // ---------- main ----------
+  // tmux server is long-lived: force the API key into its global env so every
+  // agent session (invoked without a key in its command line) inherits it.
+  if (process.env.OPENCODE_API_KEY) {
+    runCmd("tmux", ["set-environment", "-g", "OPENCODE_API_KEY", process.env.OPENCODE_API_KEY])
+  }
 async function main() {
   // API key lookup order: OPENCODE_API_KEY env -> bench/.key (gitignored) -> auth.json
   if (!process.env.OPENCODE_API_KEY) {

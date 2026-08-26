@@ -42,3 +42,4 @@
 [pipeline-monitor] tick error: mv: cannot stat '/home/roni/.pi/agent/pi-workflow/pipelines/index.json.tmp': No such file or directory
 
 pipeline-monitor: too many errors; exiting (harness will restart me)
+[pipeline-monitor] start (tick 5000ms)
