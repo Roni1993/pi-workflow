@@ -8,7 +8,7 @@
  *
  *   Run:  pi --extension ~/projects/pi-opencode-ui/extensions/grill-questions.ts
  *   Then: /grill-questions
- *         ↑↓ focus · space select · tab step · n note · t type · q close
+ *         ↑↓ focus · space/enter select · tab step · n note · t type · q close
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { matchesKey, visibleWidth, type Component } from "@earendil-works/pi-tui"
@@ -136,25 +136,36 @@ class GrillQuestions implements Component {
     if (this.onSubmit()) this.picker = Math.max(0, Math.min(1, this.picker + d))
     else this.focused = Math.max(0, Math.min(this.q().options.length, this.focused + d))
   }
+  private advance(): void {
+    this.qi = (this.qi + 1) % (QUESTIONS.length + 1)
+    this.focused = 0
+    this.picker = 0
+  }
 
   handleInput(data: string): void {
     const q = this.q()
     if (matchesKey(data, "up")) this.move(-1)
     else if (matchesKey(data, "down")) this.move(1)
-    else if (data === " ") {
-      if (this.onSubmit()) this.picker = this.picker // enter handles it
+    else if (matchesKey(data, "enter")) {
+      if (this.onSubmit()) {
+        this.done(this.picker === 0 ? "submit" : null)
+        return
+      }
+      if (this.focused === q.options.length) this.custom = true
+      else if (q.multi) this.checked.has(this.focused) ? this.checked.delete(this.focused) : this.checked.add(this.focused)
+      else this.advance()
+    } else if (data === " ") {
+      if (this.onSubmit()) this.picker = this.picker
       else if (this.focused === q.options.length) this.custom = !this.custom
       else if (q.multi) this.checked.has(this.focused) ? this.checked.delete(this.focused) : this.checked.add(this.focused)
     } else if (matchesKey(data, "tab")) {
-      this.qi = (this.qi + 1) % (QUESTIONS.length + 1)
-      this.focused = 0
-      this.picker = 0
+      this.advance()
     } else if (data === "n") this.notes = !this.notes
     else if (data === "t") {
       this.focused = q.options.length
       this.custom = true
     } else if (data === "q" || matchesKey(data, "escape")) {
-      this.done(this.onSubmit() ? "submit" : `q${this.qi + 1}`)
+      this.done(this.onSubmit() ? null : `q${this.qi + 1}`)
       return
     }
     this.invalidate()
@@ -184,7 +195,7 @@ class GrillQuestions implements Component {
     out.push("")
     const pick = ["Submit answers", "Cancel"]
     pick.forEach((p, i) => {
-      out.push(i === this.picker ? invertedLine(width, p) : qLine(width, QB.bg, QB.rail, fg(PAL.dim, p)))
+      out.push(i === this.picker ? invertedLine(width, "  " + p) : qLine(width, QB.bg, QB.rail, fg(PAL.dim, "  " + p)))
     })
     out.push("")
     out.push(fg(PAL.dim, "  ↑↓ choose · enter confirm · tab back · esc cancel"))
@@ -205,25 +216,31 @@ class GrillQuestions implements Component {
     q.options.forEach((opt, i) => {
       const on = i === this.focused
       const checked = this.checked.has(i)
-      const glyph = q.multi ? (checked ? "●  " : "○  ") : on ? "▸ " : "  "
+      const mark = q.multi ? (checked ? "● " : "○ ") : on ? "▸ " : "  "
       if (on) {
-        out.push(invertedLine(width, `${glyph}${opt.label}   ${opt.desc}${opt.recommended ? "   recommended" : ""}`))
+        out.push(invertedLine(width, `${mark}${opt.label}   ${opt.desc}${opt.recommended ? "   recommended" : ""}`))
       } else {
-        const box = q.multi ? (checked ? fg(ACCENT, "●") : fg(PAL.dim, "○")) + "  " : "  "
+        const box = q.multi ? fg(checked ? ACCENT : PAL.dim, checked ? "●" : "○") + " " : "  "
         out.push(qLine(width, QB.bg, QB.rail, box + fg(PAL.text, opt.label) + fg(PAL.dim, `   ${opt.desc}`) + (opt.recommended ? fg(PAL.think.rail, "   recommended") : "")))
       }
     })
     {
       const on = this.focused === q.options.length
       const text = this.custom ? "› your answer" + (on ? "█" : "") : "Type something."
-      out.push(on ? invertedLine(width, text) : qLine(width, QB.bg, QB.rail, fg(PAL.dim, text)))
+      const mark = q.multi ? (this.custom ? "● " : "○ ") : on ? "▸ " : "  "
+      if (on) {
+        out.push(invertedLine(width, mark + text))
+      } else {
+        const box = q.multi ? fg(this.custom ? ACCENT : PAL.dim, this.custom ? "●" : "○") + " " : "  "
+        out.push(qLine(width, QB.bg, QB.rail, box + fg(PAL.dim, text)))
+      }
+    }
+    if (this.notes) {
+      out.push(qLine(width, QB.bg, QB.rail, "  " + fg(PAL.dim, "note   ") + fg(PAL.text, "remember: keep it behind a flag") + fg(PAL.me.rail, "█")))
     }
     out.push(qLine(width, QB.bg, QB.rail, "")) // answers box: bottom padding
-    if (this.notes) {
-      out.push(qLine(width, QB.bg, QB.rail, fg(PAL.dim, "note   ") + fg(PAL.text, "remember: keep it behind a flag") + fg(PAL.me.rail, "█")))
-    }
     out.push("")
-    out.push(fg(PAL.dim, "  ↑↓ focus · space select · tab step · n note · esc cancel"))
+    out.push(fg(PAL.dim, "  ↑↓ focus · space/enter select · tab step · n note · esc cancel"))
     return out
   }
 
