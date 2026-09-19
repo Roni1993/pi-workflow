@@ -1,0 +1,220 @@
+// T8 — locked transcript cards for the BUILT-IN user/assistant turns.
+//
+// pi (with the T7 transcript seam, `pi.registerMessageRenderer("user"|"assistant")`)
+// hands each built-in turn to a renderer `(message, options, theme) => Component`.
+// This module is that renderer: the locked opencode-look user card (PAL.me) and
+// assistant card (PAL.agent), with every thinking block collapsed into ONE
+// PAL.think thoughts box — exactly the prototype
+// `pi-opencode-ui/extensions/grill-transcript.ts` look.
+//
+// Contract notes (transcript-seam.md):
+//   - message.content is a string OR ContentBlock[]; blocks are
+//     {type:"text",text} / {type:"thinking",thinking}; unknown types tolerated.
+//   - Return undefined when there is nothing to render, so pi keeps stock.
+//   - Live streaming: the seam reuses the component and re-renders as text
+//     arrives; we re-read message.content on every render (never cache content).
+//   - Width safety is non-negotiable: every line goes through truncateAnsi or
+//     pi exits with "Rendered line exceeds terminal width".
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import type { Component } from "@earendil-works/pi-tui"
+import { PAL, card, fg, truncateAnsi, wrap } from "./ui-kit"
+
+/** Parsed view of a turn: plain text + the text of every thinking block. */
+export interface TranscriptParts {
+  text: string
+  thinking: string[]
+}
+
+/** A ContentBlock we know how to read; unknown blocks are ignored. */
+interface Block {
+  type?: unknown
+  text?: unknown
+  thinking?: unknown
+}
+
+/**
+ * Coerce a turn's content (string | ContentBlock[] | anything) into text +
+ * thinking strings. Never throws, tolerates unknown block types.
+ */
+export function blocksToParts(content: unknown): TranscriptParts {
+  if (typeof content === "string") return { text: content, thinking: [] }
+  if (content === null || content === undefined) return { text: "", thinking: [] }
+  if (!Array.isArray(content)) return { text: "", thinking: [] }
+
+  const texts: string[] = []
+  const thinking: string[] = []
+  for (const raw of content) {
+    if (typeof raw === "string") {
+      texts.push(raw)
+      continue
+    }
+    if (!raw || typeof raw !== "object") continue
+    const b = raw as Block
+    if (b.type === "text") texts.push(String(b.text ?? ""))
+    else if (b.type === "thinking") thinking.push(String(b.thinking ?? b.text ?? ""))
+    // unknown block types (image, toolCall, …) are tolerated and skipped
+  }
+  return { text: texts.join("\n"), thinking }
+}
+
+/** Plain text of a turn, for the user card. */
+function plainText(content: unknown): string {
+  return blocksToParts(content).text
+}
+
+/** Wrap a multi-line plain string, emitting empty lines for blank input lines. */
+function bodyLines(text: string, inner: number): string[] {
+  const out: string[] = []
+  for (const raw of text.replace(/\r/g, "").split("\n")) {
+    if (!raw) {
+      out.push("")
+      continue
+    }
+    for (const part of wrap(raw, Math.max(1, inner))) out.push(part)
+  }
+  return out
+}
+
+/**
+ * Locked user card: `PAL.me` rail + tinted full-width background, min 3 lines
+ * (ui-kit `card` buffer). Returns [] for empty content so the caller can fall
+ * back to pi's stock rendering.
+ */
+export function renderUserCard(text: string, width: number): string[] {
+  const w = Math.max(4, Math.floor(width))
+  const src = String(text ?? "").replace(/\r/g, "")
+  if (!src.trim()) return []
+  const body = bodyLines(src, w - 3).map((l) => fg(PAL.text, l))
+  return card(w, PAL.me, body).map((l) => truncateAnsi(l, w))
+}
+
+/** ONE thoughts box: all thinking blocks expanded, with count + total chars. */
+function thoughtsBox(width: number, thinking: string[]): string[] {
+  const total = thinking.reduce((a, t) => a + t.length, 0)
+  const body: string[] = [
+    fg(PAL.think.rail, "✦ ") +
+      fg(PAL.text, `Thoughts · ${thinking.length}`) +
+      fg(PAL.dim, `   ${total} chars   (ctrl+o expand)`),
+  ]
+  for (const t of thinking) {
+    const lines = bodyLines(String(t ?? ""), width - 5)
+    if (!lines.length || (lines.length === 1 && lines[0] === "")) {
+      body.push(fg(PAL.dim, "  (empty)"))
+      continue
+    }
+    for (const l of lines) body.push(fg(PAL.dim, "  ") + fg(PAL.text, l))
+  }
+  return card(width, PAL.think, body)
+}
+
+/**
+ * Locked assistant card: text in a `PAL.agent` card, ALL thinking blocks in ONE
+ * `PAL.think` box below it. Returns [] when there is nothing renderable.
+ * `content` may be a string or a ContentBlock[].
+ */
+export function renderAssistantCard(content: unknown, width: number): string[] {
+  const w = Math.max(4, Math.floor(width))
+  const { text, thinking } = blocksToParts(content)
+  const out: string[] = []
+  if (text.trim()) out.push(...card(w, PAL.agent, bodyLines(text, w - 3).map((l) => fg(PAL.text, l))))
+  if (thinking.length) {
+    if (out.length) out.push("")
+    out.push(...thoughtsBox(w, thinking))
+  }
+  return out.map((l) => truncateAnsi(l, w))
+}
+
+/** Pull `content` off a pi message; tolerate a bare content value. */
+function contentOf(message: unknown): unknown {
+  if (message && typeof message === "object" && "content" in (message as Record<string, unknown>)) {
+    return (message as { content?: unknown }).content
+  }
+  return message
+}
+
+/**
+ * Component around the pure renderers. The T7 seam rebuilds it with the latest
+ * partial message on every stream tick, but we also implement `updateContent`
+ * (and the optional setExpanded/setOutputPad hooks) so an update in place works.
+ * Content is re-read on each render; a throw degrades to no lines, never to a
+ * crashed pi.
+ */
+class TranscriptTurn implements Component {
+  private cached?: string[]
+  private cachedWidth?: number
+
+  constructor(
+    private readonly kind: "user" | "assistant",
+    private message: unknown,
+    private streaming = false,
+  ) {}
+
+  /** Streaming seam hook: same instance, grown message. */
+  updateContent(message: unknown, streaming = false): void {
+    this.message = message
+    this.streaming = streaming
+    this.invalidate()
+  }
+  setExpanded(): void {}
+  setOutputPad(): void {}
+
+  invalidate(): void {
+    this.cached = undefined
+    this.cachedWidth = undefined
+  }
+
+  render(width: number): string[] {
+    if (this.cached && this.cachedWidth === width) return this.cached
+    let lines: string[] = []
+    try {
+      const content = contentOf(this.message)
+      lines =
+        this.kind === "user"
+          ? renderUserCard(plainText(content), width)
+          : renderAssistantCard(content, width)
+    } catch {
+      lines = []
+    }
+    this.cachedWidth = width
+    this.cached = lines
+    return lines
+  }
+}
+
+/** A message is renderable when it has text or at least one thinking block. */
+function renderable(content: unknown): boolean {
+  const { text, thinking } = blocksToParts(content)
+  return !!text.trim() || thinking.length > 0
+}
+
+/** The T7 seam adds `isStreaming` to MessageRenderOptions; read it defensively. */
+function isStreaming(options: unknown): boolean {
+  return !!(options as { isStreaming?: unknown } | undefined)?.isStreaming
+}
+
+/**
+ * T8 — register the built-in role renderers. A registered renderer with nothing
+ * to draw returns undefined so pi keeps its stock component; a throw is caught
+ * here too (the seam also swallows throws).
+ */
+export function registerTranscript(pi: ExtensionAPI): void {
+  if (typeof (pi as { registerMessageRenderer?: unknown })?.registerMessageRenderer !== "function") return
+
+  pi.registerMessageRenderer("user", (message, options) => {
+    try {
+      if (!renderable(contentOf(message))) return undefined
+      return new TranscriptTurn("user", message, isStreaming(options))
+    } catch {
+      return undefined
+    }
+  })
+
+  pi.registerMessageRenderer("assistant", (message, options) => {
+    try {
+      if (!renderable(contentOf(message))) return undefined
+      return new TranscriptTurn("assistant", message, isStreaming(options))
+    } catch {
+      return undefined
+    }
+  })
+}
