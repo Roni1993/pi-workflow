@@ -14,7 +14,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { matchesKey, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui"
-import { M, PAL, RESET, type Pair, bgOpen, bold, card, fg, fgOpen, lighten, mix, tinted } from "../lib/ui-kit"
+import { M, PAL, RESET, type Pair, bgOpen, bold, card, fg, fgOpen, lighten, mix, tinted, truncateAnsi } from "../lib/ui-kit"
 
 type State = "running" | "queued" | "done" | "blocked"
 
@@ -73,7 +73,7 @@ function phaseBar(): string {
     .join(fg(PAL.dim, "   "))
 }
 
-function workflowRow(): string {
+export function workflowRow(): string {
   const c = counts(FLOW_AGENTS)
   return (
     fg(PAL.think.rail, "⟳ ") + fg(PAL.text, bold(FLOW.name)) +
@@ -127,7 +127,7 @@ export function chatView(width: number, phase: number): string[] {
     workflowRow(),
   ]))
   out.push(fg(PAL.dim, "  enter send · d dashboard · rail = thinking"))
-  return out
+  return out.map((l) => truncateAnsi(l, width))
 }
 
 // ── locked nesting: two-tone bg + tinted inner rail ─────────────────────────
@@ -175,7 +175,7 @@ export function dashboardView(width: number): string[] {
   out.push(...workflowCard(width, FLOW_AGENTS))
   out.push("")
   out.push(...standaloneCard(width))
-  return out
+  return out.map((l) => truncateAnsi(l, width))
 }
 
 class DockExample implements Component {
@@ -223,8 +223,8 @@ class DockExample implements Component {
   }
 }
 
-function statusWidget(_tui: unknown, _theme: unknown) {
-  return { render: (w: number) => card(w, PAL.tools, [workflowRow()]), invalidate: () => {} }
+export function statusWidget(_tui: unknown, _theme: unknown) {
+  return { render: (w: number) => card(w, PAL.tools, [workflowRow()]).map((l) => truncateAnsi(l, w)), invalidate: () => {} }
 }
 
 export default function (pi: ExtensionAPI) {

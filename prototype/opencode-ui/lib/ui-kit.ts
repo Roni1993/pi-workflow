@@ -23,6 +23,9 @@ export type Role = keyof typeof FALLBACK
 
 export function loadMatugen(): Record<Role, string> {
   const out = { ...FALLBACK } as Record<Role, string>
+  // Deterministic builds (mock/goldens) pin the palette instead of reading the
+  // live matugen scheme.
+  if (process.env.PI_UI_PALETTE === "fallback") return out
   try {
     const raw = JSON.parse(readFileSync(join(homedir(), ".cache", "matugen", "scheme.json"), "utf8"))
     const c = raw?.colors ?? {}
@@ -127,4 +130,48 @@ export function cardLine(width: number, pair: Pair, styled = ""): string {
 export function card(width: number, pair: Pair, content: string[], buffer = 1): string[] {
   const pad = Array.from({ length: buffer }, () => cardLine(width, pair))
   return [...pad, ...content.map((c) => cardLine(width, pair, c)), ...pad]
+}
+
+/**
+ * ANSI-aware truncate to `width` visible columns, counted by code point (so the
+ * Powerline PUA glyphs are 1 cell, matching the terminal). Always ends in RESET.
+ * This is the width-safety guard: every rendered line must pass through it or
+ * pi exits with "Rendered line N exceeds terminal width".
+ */
+export function truncateAnsi(line: string, width: number): string {
+  if (width <= 0) return ""
+  const re = /\x1b\[([0-9;]*)m/g
+  let fg: string | null = null
+  let bg: string | null = null
+  let boldOn = false
+  let col = 0
+  let out = ""
+  let last = 0
+  let m: RegExpExecArray | null
+  const style = () => (fg ?? "") + (bg ?? "") + (boldOn ? "\x1b[1m" : "")
+  const push = (text: string) => {
+    if (!text || col >= width) return
+    const chars = [...text]
+    const take = chars.slice(0, width - col).join("")
+    out += style() + take
+    col += Math.min(chars.length, width - col)
+  }
+  while ((m = re.exec(line))) {
+    push(line.slice(last, m.index))
+    last = re.lastIndex
+    const codes = m[1]!.split(";").map(Number)
+    for (let i = 0; i < codes.length; i++) {
+      const c = codes[i]!
+      if (c === 0) { fg = null; bg = null; boldOn = false }
+      else if (c === 1) boldOn = true
+      else if (c === 22) boldOn = false
+      else if (c === 39) fg = null
+      else if (c === 49) bg = null
+      else if (c === 38 && codes[i + 1] === 2) { fg = `\x1b[38;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
+      else if (c === 48 && codes[i + 1] === 2) { bg = `\x1b[48;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
+    }
+    if (col >= width) break
+  }
+  if (col < width) push(line.slice(last))
+  return out + "\x1b[0m"
 }

@@ -6,5 +6,9 @@
   "keywords": ["pi-package"],
   "pi": {
     "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "mock": "npx --yes esbuild@0.23.1 mock/session.ts --bundle --format=esm --platform=node --alias:@earendil-works/pi-tui=./mock/pi-tui-stub.js --outfile=/tmp/session.mjs && PI_UI_PALETTE=fallback UI_MOCK_OUT=$PWD/mock node /tmp/session.mjs",
+    "test": "npx --yes esbuild@0.23.1 mock/test.ts --bundle --format=esm --platform=node --alias:@earendil-works/pi-tui=./mock/pi-tui-stub.js --outfile=/tmp/test.mjs && PI_UI_PALETTE=fallback node /tmp/test.mjs"
   }
 }

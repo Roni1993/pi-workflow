@@ -12,7 +12,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { matchesKey, visibleWidth, type Component } from "@earendil-works/pi-tui"
-import { M, PAL, RESET, type Pair, bgOpen, bold, card, fg, fgOpen, lighten, mix, tinted } from "../lib/ui-kit"
+import { M, PAL, RESET, type Pair, bgOpen, bold, card, fg, fgOpen, lighten, mix, tinted, truncateAnsi } from "../lib/ui-kit"
 
 interface Option {
   label: string
@@ -246,9 +246,10 @@ export class GrillQuestions implements Component {
 
   render(width: number): string[] {
     if (this.cached && this.cachedWidth === width) return this.cached
-    // No final truncate: pi-tui miscounts the powerline glyphs, which was
-    // trimming the line and leaving the box background short.
-    this.cached = this.onSubmit() ? this.submitView(width) : this.questionView(width)
+    // Our own ANSI-aware truncate (code-point counted) keeps the PUA chevrons
+    // at 1 cell, so the box background is not trimmed short.
+    const view = this.onSubmit() ? this.submitView(width) : this.questionView(width)
+    this.cached = view.map((l) => truncateAnsi(l, width))
     this.cachedWidth = width
     return this.cached
   }

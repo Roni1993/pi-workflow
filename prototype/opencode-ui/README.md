@@ -25,23 +25,35 @@ pi --extension ~/projects/pi-opencode-ui/extensions/grill-checkbox.ts     # /gri
 
 ## Mock full-screen render (test target)
 
-`mock/session.{html,ansi,txt}` is a composed mock of the locked UI:
-- **questions** — opencode-style modal over a dimmed transcript (chosen)
-- **session / dashboard / submit** — transcript + dock with the modal
-- **transcript variant** — answers & thoughts rendered directly (no box), only the tools bundle boxed
+`mock/session.{html,ansi,txt}` is a composed mock of the locked UI: the questions
+modal, boxed + no-box transcripts, dock chat + dashboard, submit recap, the
+multi-select step, the note row, the focused custom row, the `/dock on` status
+widget, and the user-message treatments. Open `mock/session.html` in a browser
+for the truecolor version.
 
-Open `mock/session.html` in a browser for the truecolor version.
-
-Rebuild:
+Rebuild (deterministic — palette pinned to the fallback scheme):
 
 ```sh
+npm run mock
+# or:
 npx --yes esbuild@0.23.1 mock/session.ts --bundle --format=esm --platform=node \
-  --alias:@earendil-works/pi-tui=/tmp/pi-tui-stub.js --outfile=/tmp/session.mjs
-node /tmp/session.mjs
+  --alias:@earendil-works/pi-tui=./mock/pi-tui-stub.js --outfile=/tmp/session.mjs
+PI_UI_PALETTE=fallback UI_MOCK_OUT="$PWD/mock" node /tmp/session.mjs
 ```
 
-(`/tmp/pi-tui-stub.js` is a 10-line stub exporting `visibleWidth`, `truncateToWidth`,
-`matchesKey`; the render functions are exported from the grills for this.)
+Width-safety test — the fatal-crash contract (every line ≤ width at 20/40/80/120):
+
+```sh
+npm test
+# or:
+npx --yes esbuild@0.23.1 mock/test.ts --bundle --format=esm --platform=node \
+  --alias:@earendil-works/pi-tui=./mock/pi-tui-stub.js --outfile=/tmp/test.mjs
+PI_UI_PALETTE=fallback node /tmp/test.mjs
+```
+
+`mock/pi-tui-stub.js` is committed. `PI_UI_PALETTE=fallback` pins the palette so
+output does not depend on the live matugen scheme. Render functions are exported
+from the grills for both the mock and the test.
 
 ## Locked decisions
 

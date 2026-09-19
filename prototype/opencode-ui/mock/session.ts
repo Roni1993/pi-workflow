@@ -4,14 +4,14 @@
 import { mkdirSync, writeFileSync } from "node:fs"
 import { visibleWidth } from "@earendil-works/pi-tui"
 import { renderTranscript, renderTranscriptDirect } from "../extensions/grill-transcript"
-import { chatView, dashboardView } from "../extensions/grill-dock"
+import { chatView, dashboardView, statusWidget } from "../extensions/grill-dock"
 import { GrillQuestions } from "../extensions/grill-questions"
 import { PAL, bgOpen, bold, card, fg, fgOpen, mix, RESET, tinted } from "../lib/ui-kit"
 
 const W = 120
 const PW = 72 // modal panel width
 const DIM = 0.38 // backdrop dim factor
-const OUT = "/home/roni/projects/pi-opencode-ui/mock"
+const OUT = process.env.UI_MOCK_OUT ?? `${process.cwd()}/mock`
 
 // ── ANSI helpers: dim a backdrop, slice by visible columns, composite a panel ──
 function dimAnsi(line: string, f: number): string {
@@ -80,6 +80,21 @@ const submitPanel = () => {
   q.handleInput("\t")
   return q.render(PW)
 }
+const panelMulti = () => {
+  const q = new GrillQuestions(() => {})
+  q.handleInput("\t")
+  return q.render(PW)
+}
+const panelNote = () => {
+  const q = new GrillQuestions(() => {})
+  q.handleInput("n")
+  return q.render(PW)
+}
+const panelCustom = () => {
+  const q = new GrillQuestions(() => {})
+  q.handleInput("t")
+  return q.render(PW)
+}
 
 /** Compose a modal: dim the whole base, then splice the centred panel over it. */
 function modalOver(base: string[], panel: string[]): string[] {
@@ -140,6 +155,22 @@ const frames: { title: string; lines: string[] }[] = [
   {
     title: "submit — questions recap modal",
     lines: [title("SUBMIT  ·  questions recap modal"), "", ...modalOver([...transcriptBoxed(), "", ...dockChat()], submitPanel())],
+  },
+  {
+    title: "questions — multi-select step (circle fill)",
+    lines: [title("QUESTIONS  ·  multi-select step (● / ○)"), "", ...modalOver(transcriptBoxed(), panelMulti())],
+  },
+  {
+    title: "questions — note row (n)",
+    lines: [title("QUESTIONS  ·  note row (n)"), "", ...modalOver(transcriptBoxed(), panelNote())],
+  },
+  {
+    title: "questions — focused Type something. (t)",
+    lines: [title("QUESTIONS  ·  focused custom row (t)"), "", ...modalOver(transcriptBoxed(), panelCustom())],
+  },
+  {
+    title: "dock — /dock on status widget",
+    lines: [title("DOCK STATUS WIDGET  ·  /dock on (below editor)"), "", ...statusWidget({}, {}).render(W)],
   },
   {
     title: "user message — treatments (in the no-box variant)",

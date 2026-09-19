@@ -12,7 +12,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { matchesKey, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui"
-import { PAL, bgOpen, bold, card, fg, fgOpen, mix, RESET, wrap } from "../lib/ui-kit"
+import { PAL, bgOpen, bold, card, fg, fgOpen, mix, RESET, truncateAnsi, wrap } from "../lib/ui-kit"
 
 const USER = "add caching to the API client"
 const SPEECH = "I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed."
@@ -112,14 +112,14 @@ export function renderTranscript(width: number): string[] {
   const out: string[] = []
   out.push(...card(width, PAL.me, [fg(PAL.text, USER)]))
   out.push("")
-  out.push(...card(width, PAL.agent, wrap(fg(PAL.text, SPEECH), width - 3)))
+  out.push(...card(width, PAL.agent, wrap(SPEECH, width - 3).map((l) => fg(PAL.text, l))))
   out.push("")
   out.push(...thoughtsCard(width))
   out.push("")
   out.push(...toolsCard(width))
   out.push("")
   out.push(...toolLegend(width))
-  return out
+  return out.map((l) => truncateAnsi(l, width))
 }
 
 /**
@@ -144,7 +144,7 @@ export function renderTranscriptDirect(width: number): string[] {
   for (const th of THOUGHTS) out.push(fg(think, `  ${th.ms}ms  ${th.text}`))
   out.push("")
   out.push(...toolsCard(width))
-  return out
+  return out.map((l) => truncateAnsi(l, width))
 }
 
 class GrillTranscript implements Component {
