@@ -254,3 +254,35 @@ TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed
 ▌                                                                                                                       
 ▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
 ▌                                                                                                                       
+
+===== user message — treatments =====
+USER MESSAGE  ·  treatments
+
+1 · current (baseline)
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+2 · stronger fill
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+3 · stronger fill + bold + ❯
+▌                                                                                                                       
+▌ ❯ add caching to the API client                                                                                       
+▌                                                                                                                       
+
+4 · solid accent, dark text
+▌ add caching to the API client                                                                                         
+
+5 · label + stronger fill
+▌                                                                                                                       
+▌ you                                                                                                                   
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+6 · right-aligned bubble
+                                                                ▌                                                       
+                                                                ▌ add caching to the API client                         
+                                                                ▌                                                       

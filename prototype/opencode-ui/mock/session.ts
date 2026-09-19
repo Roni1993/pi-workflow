@@ -6,6 +6,7 @@ import { visibleWidth } from "@earendil-works/pi-tui"
 import { renderTranscript, renderTranscriptDirect } from "../extensions/grill-transcript"
 import { chatView, dashboardView } from "../extensions/grill-dock"
 import { GrillQuestions } from "../extensions/grill-questions"
+import { PAL, bgOpen, bold, card, fg, fgOpen, mix, RESET, tinted } from "../lib/ui-kit"
 
 const W = 120
 const PW = 72 // modal panel width
@@ -94,6 +95,26 @@ function modalOver(base: string[], panel: string[]): string[] {
 
 const title = (t: string) => `\x1b[1m${t}\x1b[22m`
 
+// ── user-message treatments (make the user's turn stand out) ─────────────────
+function userTreatments(): { name: string; lines: string[] }[] {
+  const USER = "add caching to the API client"
+  const strong = { rail: PAL.me.rail, bg: tinted(PAL.me.rail, 0.3) }
+  const onAccent = mix(PAL.me.rail, "#000000", 0.82)
+  const solid = (content: string, width: number) => {
+    const pad = Math.max(0, width - 2 - visibleWidth(content))
+    return bgOpen(PAL.me.rail) + fgOpen(PAL.me.rail) + "▌ " + fgOpen(onAccent) + content + " ".repeat(pad) + RESET
+  }
+  const bw = 56
+  return [
+    { name: "1 · current (baseline)", lines: card(W, PAL.me, [fg(PAL.text, USER)]) },
+    { name: "2 · stronger fill", lines: card(W, strong, [fg(PAL.text, USER)]) },
+    { name: "3 · stronger fill + bold + ❯", lines: card(W, strong, [bold(fg(PAL.text, `❯ ${USER}`))]) },
+    { name: "4 · solid accent, dark text", lines: [solid(USER, W)] },
+    { name: "5 · label + stronger fill", lines: card(W, strong, [fg(PAL.dim, "you"), bold(fg(PAL.text, USER))]) },
+    { name: "6 · right-aligned bubble", lines: card(bw, strong, [fg(PAL.text, USER)]).map((l) => " ".repeat(W - bw) + l) },
+  ]
+}
+
 const frames: { title: string; lines: string[] }[] = [
   {
     title: "questions — opencode-style modal (chosen)",
@@ -114,6 +135,10 @@ const frames: { title: string; lines: string[] }[] = [
   {
     title: "transcript variant — answers & thoughts direct (no boxes)",
     lines: [title("TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed"), "", ...transcriptDirect(), "", ...dockChat()],
+  },
+  {
+    title: "user message — treatments",
+    lines: [title("USER MESSAGE  ·  treatments"), "", ...userTreatments().flatMap((t) => [`\x1b[1m${t.name}\x1b[22m`, ...t.lines, ""])],
   },
 ]
 
