@@ -99,7 +99,7 @@ const title = (t: string) => `\x1b[1m${t}\x1b[22m`
 function userTreatments(): { name: string; lines: string[] }[] {
   const USER = "add caching to the API client"
   const AGENT = "I'll add an in-memory TTL cache in front of fetch(), keyed by URL."
-  const agentCtx = () => fg(PAL.agent.rail, "  │ ") + fg(PAL.text, AGENT)
+  const agentCtx = () => fg(PAL.agent.rail, "│ ") + fg(PAL.text, AGENT)
   const strong = { rail: PAL.me.rail, bg: tinted(PAL.me.rail, 0.3) }
   const onAccent = mix(PAL.me.rail, "#000000", 0.82)
   const solid = (content: string, width: number) => {

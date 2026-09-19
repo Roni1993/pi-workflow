@@ -145,14 +145,14 @@
 ===== session (no modal) — no-box variant + dock =====
 [1mSESSION (NO MODAL)  ·  no-box variant + dock[22m
 
-  [48;2;115;213;226m[38;2;115;213;226m▌ [38;2;21;38;41madd caching to the API client                                                                                       [0m
+[48;2;115;213;226m[38;2;115;213;226m▌ [38;2;21;38;41madd caching to the API client                                                                                         [0m
 
-  [38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.[39m
 
-[38;2;228;194;119m✦ [39m[38;2;239;222;230mThoughts · 3[39m[38;2;216;192;204m  611ms   (ctrl+o expand)[39m
-  [38;2;216;192;204m148ms  [39m[38;2;239;222;230mcache key should be method + URL, not URL alone[39m
-  [38;2;216;192;204m217ms  [39m[38;2;239;222;230mdefault TTL 30s, but make it configurable[39m
-  [38;2;216;192;204m246ms  [39m[38;2;239;222;230mnever cache non-GET requests[39m
+[38;2;228;194;119m✦ [39m[38;2;182;155;95mThoughts · 3   611ms   (ctrl+o expand)[39m
+[38;2;182;155;95m  148ms  cache key should be method + URL, not URL alone[39m
+[38;2;182;155;95m  217ms  default TTL 30s, but make it configurable[39m
+[38;2;182;155;95m  246ms  never cache non-GET requests[39m
 
 [48;2;48;38;43m[38;2;160;139;150m▌                                                                                                                       [0m
 [48;2;48;38;43m[38;2;160;139;150m▌ [1m[38;2;193;131;103m●[39m[22m [38;2;193;131;103mBash  rg -n 'fetch' src  →  3 matches[39m                                                                               [0m
@@ -312,26 +312,26 @@
 
 [1m1 · current  ›[22m
 [38;2;115;213;226m› [39m[38;2;239;222;230madd caching to the API client[39m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
 
 [1m2 · bold + ❯[22m
 [1m[38;2;115;213;226m❯ [39m[22m[1m[38;2;239;222;230madd caching to the API client[39m[22m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
 
 [1m3 · full rail ▌ + bold[22m
 [38;2;115;213;226m▌ [39m[1m[38;2;239;222;230madd caching to the API client[39m[22m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
 
 [1m4 · solid accent bar, dark text[22m
 [48;2;115;213;226m[38;2;115;213;226m▌ [38;2;21;38;41madd caching to the API client                                                                                         [0m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
 
 [1m5 · label you + bold[22m
 [38;2;216;192;204myou  [39m[1m[38;2;239;222;230madd caching to the API client[39m[22m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
 
 [1m6 · highlight fill (only boxed line)[22m
 [48;2;61;84;92m[38;2;115;213;226m▌                                                                                                                       [0m
 [48;2;61;84;92m[38;2;115;213;226m▌ [1m[38;2;239;222;230madd caching to the API client[39m[22m                                                                                         [0m
 [48;2;61;84;92m[38;2;115;213;226m▌                                                                                                                       [0m
-[38;2;243;183;188m  │ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m
+[38;2;243;183;188m│ [39m[38;2;239;222;230mI'll add an in-memory TTL cache in front of fetch(), keyed by URL.[39m

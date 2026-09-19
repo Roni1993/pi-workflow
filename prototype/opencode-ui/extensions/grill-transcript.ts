@@ -130,18 +130,18 @@ export function renderTranscript(width: number): string[] {
  */
 export function renderTranscriptDirect(width: number): string[] {
   const onAccent = mix(PAL.me.rail, "#000000", 0.82)
-  const barWidth = width - 2
   const bar =
     bgOpen(PAL.me.rail) + fgOpen(PAL.me.rail) + "▌ " +
     fgOpen(onAccent) + USER +
-    " ".repeat(Math.max(0, barWidth - 2 - visibleWidth(USER))) + RESET
+    " ".repeat(Math.max(0, width - 2 - visibleWidth(USER))) + RESET
+  const think = mix(PAL.think.rail, "#000000", 0.2)
   const out: string[] = []
-  out.push("  " + bar)
+  out.push(bar)
   out.push("")
-  for (const l of wrap(SPEECH, width - 6)) out.push("  " + fg(PAL.agent.rail, "│ ") + fg(PAL.text, l))
+  for (const l of wrap(SPEECH, width - 4)) out.push(fg(PAL.agent.rail, "│ ") + fg(PAL.text, l))
   out.push("")
-  out.push(fg(PAL.think.rail, "✦ ") + fg(PAL.text, `Thoughts · ${THOUGHTS.length}`) + fg(PAL.dim, `  ${THOUGHT_TOTAL}ms   (ctrl+o expand)`))
-  for (const th of THOUGHTS) out.push("  " + fg(PAL.dim, `${th.ms}ms  `) + fg(PAL.text, th.text))
+  out.push(fg(PAL.think.rail, "✦ ") + fg(think, `Thoughts · ${THOUGHTS.length}   ${THOUGHT_TOTAL}ms   (ctrl+o expand)`))
+  for (const th of THOUGHTS) out.push(fg(think, `  ${th.ms}ms  ${th.text}`))
   out.push("")
   out.push(...toolsCard(width))
   return out

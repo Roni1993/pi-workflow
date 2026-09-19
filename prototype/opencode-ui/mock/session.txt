@@ -145,11 +145,11 @@ SESSION (NO MODAL)  ·  boxed transcript + dock
 ===== session (no modal) — no-box variant + dock =====
 SESSION (NO MODAL)  ·  no-box variant + dock
 
-  ▌ add caching to the API client                                                                                       
+▌ add caching to the API client                                                                                         
 
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.
 
-✦ Thoughts · 3  611ms   (ctrl+o expand)
+✦ Thoughts · 3   611ms   (ctrl+o expand)
   148ms  cache key should be method + URL, not URL alone
   217ms  default TTL 30s, but make it configurable
   246ms  never cache non-GET requests
@@ -312,26 +312,26 @@ USER MESSAGE  ·  treatments (no-box variant)
 
 1 · current  ›
 › add caching to the API client
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
 
 2 · bold + ❯
 ❯ add caching to the API client
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
 
 3 · full rail ▌ + bold
 ▌ add caching to the API client
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
 
 4 · solid accent bar, dark text
 ▌ add caching to the API client                                                                                         
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
 
 5 · label you + bold
 you  add caching to the API client
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
 
 6 · highlight fill (only boxed line)
 ▌                                                                                                                       
 ▌ add caching to the API client                                                                                         
 ▌                                                                                                                       
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+│ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
