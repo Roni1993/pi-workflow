@@ -25,8 +25,11 @@ pi --extension ~/projects/pi-opencode-ui/extensions/grill-checkbox.ts     # /gri
 
 ## Mock full-screen render (test target)
 
-`mock/session.{html,ansi,txt}` is a composed mock of a whole session — transcript
-cards + the questions overlay + the dock — plus dashboard and submit-recap frames.
+`mock/session.{html,ansi,txt}` is a composed mock of the locked UI:
+- **questions** — opencode-style modal over a dimmed transcript (chosen)
+- **session / dashboard / submit** — transcript + dock with the modal
+- **transcript variant** — answers & thoughts rendered directly (no box), only the tools bundle boxed
+
 Open `mock/session.html` in a browser for the truecolor version.
 
 Rebuild:

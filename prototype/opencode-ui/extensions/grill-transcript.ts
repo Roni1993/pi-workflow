@@ -122,6 +122,23 @@ export function renderTranscript(width: number): string[] {
   return out
 }
 
+/**
+ * Variant: answers (me + agent) and thoughts rendered DIRECTLY — no card, no
+ * background — on the transparent ground. Only the tools bundle stays boxed.
+ */
+export function renderTranscriptDirect(width: number): string[] {
+  const out: string[] = []
+  out.push(fg(PAL.me.rail, "› ") + fg(PAL.text, USER))
+  out.push("")
+  for (const l of wrap(SPEECH, width - 4)) out.push("  " + fg(PAL.agent.rail, "│ ") + fg(PAL.text, l))
+  out.push("")
+  out.push(fg(PAL.think.rail, "✦ ") + fg(PAL.text, `Thoughts · ${THOUGHTS.length}`) + fg(PAL.dim, `  ${THOUGHT_TOTAL}ms   (ctrl+o expand)`))
+  for (const th of THOUGHTS) out.push("  " + fg(PAL.dim, `${th.ms}ms  `) + fg(PAL.text, th.text))
+  out.push("")
+  out.push(...toolsCard(width))
+  return out
+}
+
 class GrillTranscript implements Component {
   private readonly done: (v: string | null) => void
   private cachedWidth?: number
