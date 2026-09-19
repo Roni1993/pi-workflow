@@ -122,8 +122,16 @@ const frames: { title: string; lines: string[] }[] = [
     lines: [title("QUESTIONS  ·  opencode-style modal over dimmed transcript"), "", ...modalOver(transcriptBoxed(), questionPanel())],
   },
   {
-    title: "session — transcript + modal + dock",
+    title: "session — boxed transcript + modal + dock",
     lines: [title("SESSION  ·  transcript + questions modal + dock"), "", ...modalOver([...transcriptBoxed(), "", ...dockChat()], questionPanel())],
+  },
+  {
+    title: "session (no modal) — boxed transcript + dock",
+    lines: [title("SESSION (NO MODAL)  ·  boxed transcript + dock"), "", ...transcriptBoxed(), "", ...dockChat()],
+  },
+  {
+    title: "session (no modal) — no-box variant + dock",
+    lines: [title("SESSION (NO MODAL)  ·  no-box variant + dock"), "", ...transcriptDirect(), "", ...dockChat()],
   },
   {
     title: "dashboard — workflow + nested agents + modal",
@@ -132,10 +140,6 @@ const frames: { title: string; lines: string[] }[] = [
   {
     title: "submit — questions recap modal",
     lines: [title("SUBMIT  ·  questions recap modal"), "", ...modalOver([...transcriptBoxed(), "", ...dockChat()], submitPanel())],
-  },
-  {
-    title: "transcript variant — answers & thoughts direct (no boxes)",
-    lines: [title("TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed"), "", ...transcriptDirect(), "", ...dockChat()],
   },
   {
     title: "user message — treatments (in the no-box variant)",

@@ -38,7 +38,7 @@ QUESTIONS  ·  opencode-style modal over dimmed transcript
 ▌ ● Read  src/cache.ts  →  41 lines                                                                                     
 ▌                                                                                                                       
 
-===== session — transcript + modal + dock =====
+===== session — boxed transcript + modal + dock =====
 SESSION  ·  transcript + questions modal + dock
 
 ▌                                                                                                                       
@@ -74,6 +74,103 @@ SESSION  ·  transcript + questions modal + dock
 ▌                       ▌                                                                                               
 ▌ ✚ Write  src/cache.ts  →  +41                                                                                         
 ▌                         ↑↓ focus · space/enter select · tab step · n note · esc cancel                                
+▌ ● Read  src/cache.ts  →  41 lines                                                                                     
+▌                                                                                                                       
+
+
+▌                                                                                                                       
+▌ On it — reading the client and the existing tests first.                                                              
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ test message that i was typing before the agent started█                                                              
+▌                                                                                                                       
+▌ Build auto  ·  DeepSeek V4.1 Flash OpenCode Go  ·  high  ·  ctx 42%   $0.18   ~/projects/pi-opencode-ui               
+▌                                                                                                                       
+▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
+▌                                                                                                                       
+
+===== session (no modal) — boxed transcript + dock =====
+SESSION (NO MODAL)  ·  boxed transcript + dock
+
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output                       
+▌ collapsed.                                                                                                            
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ✦ Thoughts · 3  611ms   (ctrl+o expand)                                                                               
+▌   148ms  cache key should be method + URL, not URL alone                                                              
+▌   217ms  default TTL 30s, but make it configurable                                                                    
+▌   246ms  never cache non-GET requests                                                                                 
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
+▌                                                                                                                       
+▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌                                                                                                                       
+▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  1 failed                                                                                
+▌                                                                                                                       
+▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  4 passed                                                                                
+▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    Tests: 4 passed, 4 total                                                                                           
+▌                                                                                                                       
+▌ ✚ Write  src/cache.ts  →  +41                                                                                         
+▌                                                                                                                       
+▌ ● Read  src/cache.ts  →  41 lines                                                                                     
+▌                                                                                                                       
+
+
+▌                                                                                                                       
+▌ On it — reading the client and the existing tests first.                                                              
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ test message that i was typing before the agent started█                                                              
+▌                                                                                                                       
+▌ Build auto  ·  DeepSeek V4.1 Flash OpenCode Go  ·  high  ·  ctx 42%   $0.18   ~/projects/pi-opencode-ui               
+▌                                                                                                                       
+▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
+▌                                                                                                                       
+
+===== session (no modal) — no-box variant + dock =====
+SESSION (NO MODAL)  ·  no-box variant + dock
+
+  ▌ add caching to the API client                                                                                       
+
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.
+
+✦ Thoughts · 3  611ms   (ctrl+o expand)
+  148ms  cache key should be method + URL, not URL alone
+  217ms  default TTL 30s, but make it configurable
+  246ms  never cache non-GET requests
+
+▌                                                                                                                       
+▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
+▌                                                                                                                       
+▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌                                                                                                                       
+▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  1 failed                                                                                
+▌                                                                                                                       
+▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  4 passed                                                                                
+▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    Tests: 4 passed, 4 total                                                                                           
+▌                                                                                                                       
+▌ ✚ Write  src/cache.ts  →  +41                                                                                         
+▌                                                                                                                       
 ▌ ● Read  src/cache.ts  →  41 lines                                                                                     
 ▌                                                                                                                       
 
@@ -194,51 +291,6 @@ SUBMIT  ·  questions recap modal
 ▌                       ▌   Cancel                                                                                      
 ▌ ✚ Write  src/cache.ts  →  +41                                                                                         
 ▌                         ↑↓ choose · enter confirm · tab back · esc cancel                                             
-▌ ● Read  src/cache.ts  →  41 lines                                                                                     
-▌                                                                                                                       
-
-
-▌                                                                                                                       
-▌ On it — reading the client and the existing tests first.                                                              
-▌                                                                                                                       
-
-▌                                                                                                                       
-▌ test message that i was typing before the agent started█                                                              
-▌                                                                                                                       
-▌ Build auto  ·  DeepSeek V4.1 Flash OpenCode Go  ·  high  ·  ctx 42%   $0.18   ~/projects/pi-opencode-ui               
-▌                                                                                                                       
-▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
-▌                                                                                                                       
-
-===== transcript variant — answers & thoughts direct (no boxes) =====
-TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed
-
-› add caching to the API client
-
-  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed.
-
-✦ Thoughts · 3  611ms   (ctrl+o expand)
-  148ms  cache key should be method + URL, not URL alone
-  217ms  default TTL 30s, but make it configurable
-  246ms  never cache non-GET requests
-
-▌                                                                                                                       
-▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
-▌                                                                                                                       
-▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
-▌                                                                                                                       
-▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
-▌                                                                                                                       
-▌ ● Bash  npm test -- cache  →  1 failed                                                                                
-▌                                                                                                                       
-▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
-▌                                                                                                                       
-▌ ● Bash  npm test -- cache  →  4 passed                                                                                
-▌    PASS src/cache.test.ts (4 tests)                                                                                   
-▌    Tests: 4 passed, 4 total                                                                                           
-▌                                                                                                                       
-▌ ✚ Write  src/cache.ts  →  +41                                                                                         
-▌                                                                                                                       
 ▌ ● Read  src/cache.ts  →  41 lines                                                                                     
 ▌                                                                                                                       
 

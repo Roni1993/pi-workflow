@@ -12,7 +12,7 @@
  */
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { matchesKey, truncateToWidth, visibleWidth, type Component } from "@earendil-works/pi-tui"
-import { PAL, bold, card, fg, wrap } from "../lib/ui-kit"
+import { PAL, bgOpen, bold, card, fg, fgOpen, mix, RESET, wrap } from "../lib/ui-kit"
 
 const USER = "add caching to the API client"
 const SPEECH = "I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output collapsed."
@@ -125,12 +125,20 @@ export function renderTranscript(width: number): string[] {
 /**
  * Variant: answers (me + agent) and thoughts rendered DIRECTLY — no card, no
  * background — on the transparent ground. Only the tools bundle stays boxed.
+ * The user turn is the one solid block (primary bar, dark text), indented to
+ * match the agent rail, with a blank line before the agent reply.
  */
 export function renderTranscriptDirect(width: number): string[] {
+  const onAccent = mix(PAL.me.rail, "#000000", 0.82)
+  const barWidth = width - 2
+  const bar =
+    bgOpen(PAL.me.rail) + fgOpen(PAL.me.rail) + "▌ " +
+    fgOpen(onAccent) + USER +
+    " ".repeat(Math.max(0, barWidth - 2 - visibleWidth(USER))) + RESET
   const out: string[] = []
-  out.push(fg(PAL.me.rail, "› ") + fg(PAL.text, USER))
+  out.push("  " + bar)
   out.push("")
-  for (const l of wrap(SPEECH, width - 4)) out.push("  " + fg(PAL.agent.rail, "│ ") + fg(PAL.text, l))
+  for (const l of wrap(SPEECH, width - 6)) out.push("  " + fg(PAL.agent.rail, "│ ") + fg(PAL.text, l))
   out.push("")
   out.push(fg(PAL.think.rail, "✦ ") + fg(PAL.text, `Thoughts · ${THOUGHTS.length}`) + fg(PAL.dim, `  ${THOUGHT_TOTAL}ms   (ctrl+o expand)`))
   for (const th of THOUGHTS) out.push("  " + fg(PAL.dim, `${th.ms}ms  `) + fg(PAL.text, th.text))
