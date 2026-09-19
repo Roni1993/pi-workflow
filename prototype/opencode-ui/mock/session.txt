@@ -255,34 +255,31 @@ TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed
 ▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
 ▌                                                                                                                       
 
-===== user message — treatments =====
-USER MESSAGE  ·  treatments
+===== user message — treatments (in the no-box variant) =====
+USER MESSAGE  ·  treatments (no-box variant)
 
-1 · current (baseline)
+1 · current  ›
+› add caching to the API client
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+
+2 · bold + ❯
+❯ add caching to the API client
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+
+3 · full rail ▌ + bold
+▌ add caching to the API client
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+
+4 · solid accent bar, dark text
+▌ add caching to the API client                                                                                         
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+
+5 · label you + bold
+you  add caching to the API client
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.
+
+6 · highlight fill (only boxed line)
 ▌                                                                                                                       
 ▌ add caching to the API client                                                                                         
 ▌                                                                                                                       
-
-2 · stronger fill
-▌                                                                                                                       
-▌ add caching to the API client                                                                                         
-▌                                                                                                                       
-
-3 · stronger fill + bold + ❯
-▌                                                                                                                       
-▌ ❯ add caching to the API client                                                                                       
-▌                                                                                                                       
-
-4 · solid accent, dark text
-▌ add caching to the API client                                                                                         
-
-5 · label + stronger fill
-▌                                                                                                                       
-▌ you                                                                                                                   
-▌ add caching to the API client                                                                                         
-▌                                                                                                                       
-
-6 · right-aligned bubble
-                                                                ▌                                                       
-                                                                ▌ add caching to the API client                         
-                                                                ▌                                                       
+  │ I'll add an in-memory TTL cache in front of fetch(), keyed by URL.

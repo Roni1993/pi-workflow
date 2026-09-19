@@ -95,23 +95,24 @@ function modalOver(base: string[], panel: string[]): string[] {
 
 const title = (t: string) => `\x1b[1m${t}\x1b[22m`
 
-// ── user-message treatments (make the user's turn stand out) ─────────────────
+// ── user-message treatments IN THE NO-BOX VARIANT ───────────────────────────
 function userTreatments(): { name: string; lines: string[] }[] {
   const USER = "add caching to the API client"
+  const AGENT = "I'll add an in-memory TTL cache in front of fetch(), keyed by URL."
+  const agentCtx = () => fg(PAL.agent.rail, "  │ ") + fg(PAL.text, AGENT)
   const strong = { rail: PAL.me.rail, bg: tinted(PAL.me.rail, 0.3) }
   const onAccent = mix(PAL.me.rail, "#000000", 0.82)
   const solid = (content: string, width: number) => {
     const pad = Math.max(0, width - 2 - visibleWidth(content))
     return bgOpen(PAL.me.rail) + fgOpen(PAL.me.rail) + "▌ " + fgOpen(onAccent) + content + " ".repeat(pad) + RESET
   }
-  const bw = 56
   return [
-    { name: "1 · current (baseline)", lines: card(W, PAL.me, [fg(PAL.text, USER)]) },
-    { name: "2 · stronger fill", lines: card(W, strong, [fg(PAL.text, USER)]) },
-    { name: "3 · stronger fill + bold + ❯", lines: card(W, strong, [bold(fg(PAL.text, `❯ ${USER}`))]) },
-    { name: "4 · solid accent, dark text", lines: [solid(USER, W)] },
-    { name: "5 · label + stronger fill", lines: card(W, strong, [fg(PAL.dim, "you"), bold(fg(PAL.text, USER))]) },
-    { name: "6 · right-aligned bubble", lines: card(bw, strong, [fg(PAL.text, USER)]).map((l) => " ".repeat(W - bw) + l) },
+    { name: "1 · current  ›", lines: [fg(PAL.me.rail, "› ") + fg(PAL.text, USER), agentCtx()] },
+    { name: "2 · bold + ❯", lines: [bold(fg(PAL.me.rail, "❯ ")) + bold(fg(PAL.text, USER)), agentCtx()] },
+    { name: "3 · full rail ▌ + bold", lines: [fg(PAL.me.rail, "▌ ") + bold(fg(PAL.text, USER)), agentCtx()] },
+    { name: "4 · solid accent bar, dark text", lines: [solid(USER, W), agentCtx()] },
+    { name: "5 · label you + bold", lines: [fg(PAL.dim, "you  ") + bold(fg(PAL.text, USER)), agentCtx()] },
+    { name: "6 · highlight fill (only boxed line)", lines: [...card(W, strong, [bold(fg(PAL.text, USER))]), agentCtx()] },
   ]
 }
 
@@ -137,8 +138,8 @@ const frames: { title: string; lines: string[] }[] = [
     lines: [title("TRANSCRIPT VARIANT  ·  answers + thoughts direct, only tools boxed"), "", ...transcriptDirect(), "", ...dockChat()],
   },
   {
-    title: "user message — treatments",
-    lines: [title("USER MESSAGE  ·  treatments"), "", ...userTreatments().flatMap((t) => [`\x1b[1m${t.name}\x1b[22m`, ...t.lines, ""])],
+    title: "user message — treatments (in the no-box variant)",
+    lines: [title("USER MESSAGE  ·  treatments (no-box variant)"), "", ...userTreatments().flatMap((t) => [`\x1b[1m${t.name}\x1b[22m`, ...t.lines, ""])],
   },
 ]
 
