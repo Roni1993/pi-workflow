@@ -111,7 +111,7 @@ function stepper(active: number): string {
   return s
 }
 
-class GrillQuestions implements Component {
+export class GrillQuestions implements Component {
   private qi = 0
   private focused = 0
   private picker = 0

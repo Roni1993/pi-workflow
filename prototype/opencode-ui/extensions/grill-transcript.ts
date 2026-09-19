@@ -108,7 +108,7 @@ function toolLegend(width: number): string[] {
   return card(width, PAL.tools, [fg(PAL.dim, "tool colours   ") + line])
 }
 
-function renderTranscript(width: number): string[] {
+export function renderTranscript(width: number): string[] {
   const out: string[] = []
   out.push(...card(width, PAL.me, [fg(PAL.text, USER)]))
   out.push("")

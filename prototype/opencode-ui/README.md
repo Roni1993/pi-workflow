@@ -23,6 +23,23 @@ pi --extension ~/projects/pi-opencode-ui/extensions/grill-questions.ts    # /gri
 pi --extension ~/projects/pi-opencode-ui/extensions/grill-checkbox.ts     # /grill-checkbox
 ```
 
+## Mock full-screen render (test target)
+
+`mock/session.{html,ansi,txt}` is a composed mock of a whole session — transcript
+cards + the questions overlay + the dock — plus dashboard and submit-recap frames.
+Open `mock/session.html` in a browser for the truecolor version.
+
+Rebuild:
+
+```sh
+npx --yes esbuild@0.23.1 mock/session.ts --bundle --format=esm --platform=node \
+  --alias:@earendil-works/pi-tui=/tmp/pi-tui-stub.js --outfile=/tmp/session.mjs
+node /tmp/session.mjs
+```
+
+(`/tmp/pi-tui-stub.js` is a 10-line stub exporting `visibleWidth`, `truncateToWidth`,
+`matchesKey`; the render functions are exported from the grills for this.)
+
 ## Locked decisions
 
 **Shared language** — palette read live from matugen (`~/.cache/matugen/scheme.json`);

@@ -1,0 +1,231 @@
+
+===== session — transcript + questions overlay + dock =====
+SESSION  ·  transcript + questions overlay + dock
+
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output                       
+▌ collapsed.                                                                                                            
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ✦ Thoughts · 3  611ms   (ctrl+o expand)                                                                               
+▌   148ms  cache key should be method + URL, not URL alone                                                              
+▌   217ms  default TTL 30s, but make it configurable                                                                    
+▌   246ms  never cache non-GET requests                                                                                 
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
+▌                                                                                                                       
+▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌                                                                                                                       
+▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  1 failed                                                                                
+▌                                                                                                                       
+▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  4 passed                                                                                
+▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    Tests: 4 passed, 4 total                                                                                           
+▌                                                                                                                       
+▌ ✚ Write  src/cache.ts  →  +41                                                                                         
+▌                                                                                                                       
+▌ ● Read  src/cache.ts  →  41 lines                                                                                     
+▌                                                                                                                       
+
+          ▌                                                                                                   
+          ▌  Caching strategy  Testing  Submit                                                            
+          ▌ Which caching approach should I implement?                                                        
+          ▌                                                                                                   
+          
+          ▌                                                                                                   
+          ▌ preview                                                                                           
+          ▌   const cache = new Map<string, { v: string; exp: number }>()                                     
+          ▌   get(k) { const e = cache.get(k); return e && e.exp > now() ? e.v : undefined }                  
+          ▌                                                                                                   
+          
+          ▌                                                                                                   
+          ▌ ▸ TTL map   simplest — entries expire after 30s   recommended                                     
+          ▌   LRU map   bounded size, evicts least-recent                                                     
+          ▌   No cache   leave it; measure first                                                              
+          ▌   Type something.                                                                                 
+          ▌                                                                                                   
+          
+            ↑↓ focus · space/enter select · tab step · n note · esc cancel
+
+
+▌                                                                                                                       
+▌ On it — reading the client and the existing tests first.                                                              
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ test message that i was typing before the agent started█                                                              
+▌                                                                                                                       
+▌ Build auto  ·  DeepSeek V4.1 Flash OpenCode Go  ·  high  ·  ctx 42%   $0.18   ~/projects/pi-opencode-ui               
+▌                                                                                                                       
+▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
+▌                                                                                                                       
+
+===== dashboard — dock dashboard (workflow + nested agents) =====
+DASHBOARD  ·  dock dashboard + questions overlay
+
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output                       
+▌ collapsed.                                                                                                            
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ✦ Thoughts · 3  611ms   (ctrl+o expand)                                                                               
+▌   148ms  cache key should be method + URL, not URL alone                                                              
+▌   217ms  default TTL 30s, but make it configurable                                                                    
+▌   246ms  never cache non-GET requests                                                                                 
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
+▌                                                                                                                       
+▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌                                                                                                                       
+▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  1 failed                                                                                
+▌                                                                                                                       
+▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  4 passed                                                                                
+▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    Tests: 4 passed, 4 total                                                                                           
+▌                                                                                                                       
+▌ ✚ Write  src/cache.ts  →  +41                                                                                         
+▌                                                                                                                       
+▌ ● Read  src/cache.ts  →  41 lines                                                                                     
+▌                                                                                                                       
+
+          ▌                                                                                                   
+          ▌  Caching strategy  Testing  Submit                                                            
+          ▌ Which caching approach should I implement?                                                        
+          ▌                                                                                                   
+          
+          ▌                                                                                                   
+          ▌ preview                                                                                           
+          ▌   const cache = new Map<string, { v: string; exp: number }>()                                     
+          ▌   get(k) { const e = cache.get(k); return e && e.exp > now() ? e.v : undefined }                  
+          ▌                                                                                                   
+          
+          ▌                                                                                                   
+          ▌ ▸ TTL map   simplest — entries expire after 30s   recommended                                     
+          ▌   LRU map   bounded size, evicts least-recent                                                     
+          ▌   No cache   leave it; measure first                                                              
+          ▌   Type something.                                                                                 
+          ▌                                                                                                   
+          
+            ↑↓ focus · space/enter select · tab step · n note · esc cancel
+
+▌                                                                                                                       
+▌ test message that i was typing bef…   draft kept · esc restores                                                       
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ⟳ workflow  add-caching  running                                                                                      
+▌   ✓ Plan   ✓ Implement   ⟳ Review   · Verify                                                                          
+▌   2m46s  ·  4 agents  ·  27.1k tokens  ·  ● 2  ○ 1  ✓ 1                                                               
+▌                                                                                                                       
+▌   ▏ ✎ impl-3f2a   implementer   ● running   2m14s   18.4k tok                                                         
+▌   ▏ deepseek-v4-pro   ·   Edit src/client.ts                                                                          
+▌   ▏                                                                                                                   
+▌   ▏ ● review1-9c   verifier   ● running   42s   6.1k tok                                                              
+▌   ▏ glm-5.3-flash   ·   Read src/cache.ts                                                                             
+▌   ▏                                                                                                                   
+▌   ▏ ● review2-7b   verifier   ○ queued   —   — tok                                                                    
+▌   ▏ glm-5.3-flash   ·   waiting for review1                                                                           
+▌   ▏                                                                                                                   
+▌   ▏ ● rca-1a   recovery   ✓ done   18s   3.2k tok                                                                     
+▌   ▏ deepseek-v4-pro   ·   diagnosed stuck loop                                                                        
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ standalone agents   ·   not part of a workflow                                                                        
+▌                                                                                                                       
+▌ ◇ scout-9d   researcher   ● running   1m03s   4.4k tok                                                                
+▌    glm-5.3-flash   ·   scanning auth middleware                                                                       
+▌                                                                                                                       
+
+===== submit — questions submit recap =====
+SUBMIT  ·  questions recap overlay
+
+▌                                                                                                                       
+▌ add caching to the API client                                                                                         
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ I'll add an in-memory TTL cache in front of fetch(), keyed by URL, and keep the old test output                       
+▌ collapsed.                                                                                                            
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ✦ Thoughts · 3  611ms   (ctrl+o expand)                                                                               
+▌   148ms  cache key should be method + URL, not URL alone                                                              
+▌   217ms  default TTL 30s, but make it configurable                                                                    
+▌   246ms  never cache non-GET requests                                                                                 
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ ● Bash  rg -n 'fetch' src  →  3 matches                                                                               
+▌                                                                                                                       
+▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌                                                                                                                       
+▌ ● Read  src/client.ts:1-80  →  80 lines                                                                               
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  1 failed                                                                                
+▌                                                                                                                       
+▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
+▌                                                                                                                       
+▌ ● Bash  npm test -- cache  →  4 passed                                                                                
+▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    Tests: 4 passed, 4 total                                                                                           
+▌                                                                                                                       
+▌ ✚ Write  src/cache.ts  →  +41                                                                                         
+▌                                                                                                                       
+▌ ● Read  src/cache.ts  →  41 lines                                                                                     
+▌                                                                                                                       
+
+          ▌                                                                                                   
+          ▌  Caching strategy  Testing  Submit                                                            
+          ▌ Review your answers                                                                               
+          ▌                                                                                                   
+          
+          ▌                                                                                                   
+          ▌ Caching strategy                                                                                  
+          ▌ ▏ TTL map                                                                                         
+          ▌ ▏ note   keep it behind a flag                                                                    
+          ▌                                                                                                   
+          ▌ Testing                                                                                           
+          ▌ ▏ Unit, E2E                                                                                       
+          ▌                                                                                                   
+          
+          ▌   Submit answers                                                                                  
+          ▌   Cancel                                                                                          
+          
+            ↑↓ choose · enter confirm · tab back · esc cancel
+
+
+▌                                                                                                                       
+▌ On it — reading the client and the existing tests first.                                                              
+▌                                                                                                                       
+
+▌                                                                                                                       
+▌ test message that i was typing before the agent started█                                                              
+▌                                                                                                                       
+▌ Build auto  ·  DeepSeek V4.1 Flash OpenCode Go  ·  high  ·  ctx 42%   $0.18   ~/projects/pi-opencode-ui               
+▌                                                                                                                       
+▌ ⟳ add-caching   Review 3/4   ● 2  ○ 1  ✓ 1   2m46s  27.1k                                                             
+▌                                                                                                                       

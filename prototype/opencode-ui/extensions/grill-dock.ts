@@ -114,7 +114,7 @@ function chatbox(width: number, phase: number, content: string[]): string[] {
   })
 }
 
-function chatView(width: number, phase: number): string[] {
+export function chatView(width: number, phase: number): string[] {
   const out: string[] = []
   out.push("")
   out.push(...card(width, PAL.agent, [fg(PAL.text, "On it — reading the client and the existing tests first.")]))
@@ -168,7 +168,7 @@ function standaloneCard(width: number): string[] {
   return card(width, PAL.tools, body)
 }
 
-function dashboardView(width: number): string[] {
+export function dashboardView(width: number): string[] {
   const out: string[] = []
   out.push(...card(width, CHATBOX, [fg(PAL.text, DRAFT.slice(0, 34) + "…") + fg(PAL.dim, "   draft kept · esc restores")]))
   out.push("")
