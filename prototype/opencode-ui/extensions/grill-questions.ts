@@ -180,7 +180,7 @@ export class GrillQuestions implements Component {
     const out: string[] = []
     // same header shape as a question: stepper + title (keeps the layout stable)
     out.push(headerLine(width, ""), headerLine(width, stepper(this.qi)), headerLine(width, fg(PAL.text, bold("Review your answers"))), headerLine(width, ""))
-    out.push("")
+    out.push(qLine(width, QB.bg, QB.rail, ""))
     // all Q&A in ONE box; the answer line sits on a deeper (2nd) background with an inner rail
     const recap: string[] = [qLine(width, QB.bg, QB.rail, "")]
     QUESTIONS.forEach((q, i) => {
@@ -192,13 +192,13 @@ export class GrillQuestions implements Component {
     })
     recap.push(qLine(width, QB.bg, QB.rail, ""))
     out.push(...recap)
-    out.push("")
+    out.push(qLine(width, QB.bg, QB.rail, ""))
     const pick = ["Submit answers", "Cancel"]
     pick.forEach((p, i) => {
       out.push(i === this.picker ? invertedLine(width, "  " + p) : qLine(width, QB.bg, QB.rail, fg(PAL.dim, "  " + p)))
     })
-    out.push("")
-    out.push(fg(PAL.dim, "  ↑↓ choose · enter confirm · tab back · esc cancel"))
+    out.push(qLine(width, QB.bg, QB.rail, ""))
+    out.push(qLine(width, QB.bg, QB.rail, fg(PAL.dim, "  ↑↓ choose · enter confirm · tab back · esc cancel")))
     return out
   }
 
@@ -207,10 +207,10 @@ export class GrillQuestions implements Component {
     const o = q.options[this.focused]
     const out: string[] = []
     out.push(headerLine(width, ""), headerLine(width, stepper(this.qi)), headerLine(width, fg(PAL.text, bold(q.question))), headerLine(width, ""))
-    out.push("")
+    out.push(qLine(width, QB.bg, QB.rail, ""))
     const preview = o ? o.preview : ["type your own answer in the row below"]
     out.push(...card(width, PAL.tools, [fg(PAL.dim, o ? "preview" : "your answer"), ...preview.map((p) => fg(PAL.text, "  " + p))]))
-    out.push("")
+    out.push(qLine(width, QB.bg, QB.rail, ""))
     out.push(qLine(width, QB.bg, QB.rail, "")) // answers box: top padding
 
     q.options.forEach((opt, i) => {
@@ -239,8 +239,8 @@ export class GrillQuestions implements Component {
       out.push(qLine(width, QB.bg, QB.rail, "  " + fg(PAL.dim, "note   ") + fg(PAL.text, "remember: keep it behind a flag") + fg(PAL.me.rail, "█")))
     }
     out.push(qLine(width, QB.bg, QB.rail, "")) // answers box: bottom padding
-    out.push("")
-    out.push(fg(PAL.dim, "  ↑↓ focus · space/enter select · tab step · n note · esc cancel"))
+    out.push(qLine(width, QB.bg, QB.rail, ""))
+    out.push(qLine(width, QB.bg, QB.rail, fg(PAL.dim, "  ↑↓ focus · space/enter select · tab step · n note · esc cancel")))
     return out
   }
 

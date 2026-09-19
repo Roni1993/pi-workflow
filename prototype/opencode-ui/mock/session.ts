@@ -161,11 +161,12 @@ function ansiToHtml(line: string): string {
   let m: RegExpExecArray | null
   const span = (text: string) => {
     if (!text) return ""
+    const clean = esc(text.replace(/\uE0B0/g, "❯").replace(/\uE0B2/g, "❮"))
     const st: string[] = []
     if (fg) st.push(`color:${fg}`)
     if (bg) st.push(`background:${bg}`)
     if (bold) st.push("font-weight:700")
-    return `<span style="${st.join(";")}">${esc(text)}</span>`
+    return st.length ? `<span style="${st.join(";")}">${clean}</span>` : clean
   }
   while ((m = re.exec(line))) {
     out += span(line.slice(last, m.index))

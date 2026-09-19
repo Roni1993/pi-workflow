@@ -14,21 +14,21 @@ QUESTIONS  ·  opencode-style modal over dimmed transcript
 ▌                       ▌  Caching strategy  Testing  Submit                                                        
 ▌ ✦ Thoughts · 3  611ms ▌ Which caching approach should I implement?                                                    
 ▌   148ms  cache key sho▌                                                                                               
-▌   217ms  default TTL 30s, but make it configurable                                                                    
+▌   217ms  default TTL 3▌                                                                                               
 ▌   246ms  never cache n▌                                                                                               
 ▌                       ▌ preview                                                                                       
 ▌   const cache = new Map<string, { v: string; exp: number }>()         
 ▌                       ▌   get(k) { const e = cache.get(k); return e && e.exp > now() ? e.v : u                        
 ▌ ● Bash  rg -n 'fetch' ▌                                                                                               
-▌                                                                                                                       
+▌                       ▌                                                                                               
 ▌ ◇ Glob  **/*.test.ts  ▌                                                                                               
 ▌                       ▌ ▸ TTL map   simplest — entries expire after 30s   recommended                                 
 ▌ ● Read  src/client.ts:▌   LRU map   bounded size, evicts least-recent                                                 
 ▌                       ▌   No cache   leave it; measure first                                                          
 ▌ ● Bash  npm test -- ca▌   Type something.                                                                             
 ▌                       ▌                                                                                               
-▌ ✎ Edit  src/client.ts  →  +18 −2                                                                                      
-▌                         ↑↓ focus · space/enter select · tab step · n note · esc cancel                                
+▌ ✎ Edit  src/client.ts ▌                                                                                               
+▌                       ▌   ↑↓ focus · space/enter select · tab step · n note · esc cancel                              
 ▌ ● Bash  npm test -- cache  →  4 passed                                                                                
 ▌    PASS src/cache.test.ts (4 tests)                                                                                   
 ▌    Tests: 4 passed, 4 total                                                                                           
@@ -59,21 +59,21 @@ SESSION  ·  transcript + questions modal + dock
 ▌  Caching strategy  Testing  Submit                                
 ▌                       ▌ Which caching approach should I implement?                                                    
 ▌ ● Bash  rg -n 'fetch' ▌                                                                                               
-▌                                                                                                                       
+▌                       ▌                                                                                               
 ▌ ◇ Glob  **/*.test.ts  ▌                                                                                               
 ▌                       ▌ preview                                                                                       
 ▌ ● Read  src/client.ts:▌   const cache = new Map<string, { v: string; exp: number }>()                                 
 ▌                       ▌   get(k) { const e = cache.get(k); return e && e.exp > now() ? e.v : u                        
 ▌ ● Bash  npm test -- ca▌                                                                                               
-▌                                                                                                                       
+▌                       ▌                                                                                               
 ▌ ✎ Edit  src/client.ts ▌                                                                                               
 ▌                       ▌ ▸ TTL map   simplest — entries expire after 30s   recommended                                 
 ▌ ● Bash  npm test -- ca▌   LRU map   bounded size, evicts least-recent                                                 
 ▌    PASS src/cache.test▌   No cache   leave it; measure first                                                          
 ▌    Tests: 4 passed, 4 ▌   Type something.                                                                             
 ▌                       ▌                                                                                               
-▌ ✚ Write  src/cache.ts  →  +41                                                                                         
-▌                         ↑↓ focus · space/enter select · tab step · n note · esc cancel                                
+▌ ✚ Write  src/cache.ts ▌                                                                                               
+▌                       ▌   ↑↓ focus · space/enter select · tab step · n note · esc cancel                              
 ▌ ● Read  src/cache.ts  →  41 lines                                                                                     
 ▌                                                                                                                       
 
@@ -216,21 +216,21 @@ DASHBOARD  ·  dock dashboard + questions modal
 ▌ ● Bash  npm test -- ca▌  Caching strategy  Testing  Submit                                                        
 ▌                       ▌ Which caching approach should I implement?                                                    
 ▌ ✎ Edit  src/client.ts ▌                                                                                               
-▌                                                                                                                       
+▌                       ▌                                                                                               
 ▌ ● Bash  npm test -- ca▌                                                                                               
 ▌    PASS src/cache.test▌ preview                                                                                       
 ▌    Tests: 4 passed, 4 ▌   const cache = new Map<string, { v: string; exp: number }>()                                 
 ▌                       ▌   get(k) { const e = cache.get(k); return e && e.exp > now() ? e.v : u                        
 ▌ ✚ Write  src/cache.ts ▌                                                                                               
-▌                                                                                                                       
+▌                       ▌                                                                                               
 ▌ ● Read  src/cache.ts  ▌                                                                                               
 ▌                       ▌ ▸ TTL map   simplest — entries expire after 30s   recommended                                 
 ▌   LRU map   bounded size, evicts least-recent                         
 ▌                       ▌   No cache   leave it; measure first                                                          
 ▌ test message that i wa▌   Type something.                                                                             
 ▌                       ▌                                                                                               
-
-▌                         ↑↓ focus · space/enter select · tab step · n note · esc cancel                                
+▌                                                                       
+▌                       ▌   ↑↓ focus · space/enter select · tab step · n note · esc cancel                              
 ▌ ⟳ workflow  add-caching  running                                                                                      
 ▌   ✓ Plan   ✓ Implement   ⟳ Review   · Verify                                                                          
 ▌   2m46s  ·  4 agents  ·  27.1k tokens  ·  ● 2  ○ 1  ✓ 1                                                               
@@ -277,7 +277,7 @@ SUBMIT  ·  questions recap modal
 ▌                       ▌  Caching strategy  Testing  Submit                                                        
 ▌ ● Bash  rg -n 'fetch' ▌ Review your answers                                                                           
 ▌                       ▌                                                                                               
-▌ ◇ Glob  **/*.test.ts  →  4 files                                                                                      
+▌ ◇ Glob  **/*.test.ts  ▌                                                                                               
 ▌                       ▌                                                                                               
 ▌ ● Read  src/client.ts:▌ Caching strategy                                                                              
 ▌                       ▌ ▏ TTL map                                                                                     
@@ -286,11 +286,11 @@ SUBMIT  ·  questions recap modal
 ▌ ✎ Edit  src/client.ts ▌ Testing                                                                                       
 ▌                       ▌ ▏ Unit, E2E                                                                                   
 ▌ ● Bash  npm test -- ca▌                                                                                               
-▌    PASS src/cache.test.ts (4 tests)                                                                                   
+▌    PASS src/cache.test▌                                                                                               
 ▌    Tests: 4 passed, 4 ▌   Submit answers                                                                              
 ▌                       ▌   Cancel                                                                                      
-▌ ✚ Write  src/cache.ts  →  +41                                                                                         
-▌                         ↑↓ choose · enter confirm · tab back · esc cancel                                             
+▌ ✚ Write  src/cache.ts ▌                                                                                               
+▌                       ▌   ↑↓ choose · enter confirm · tab back · esc cancel                                           
 ▌ ● Read  src/cache.ts  →  41 lines                                                                                     
 ▌                                                                                                                       
 
