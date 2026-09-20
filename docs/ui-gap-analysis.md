@@ -236,14 +236,16 @@ Crash log (definitive): `/home/roni/.pi/agent/pi-tui-crash.log`
   (`ui-kit.ts:199–243`) believed it was 377.
 - Test blind spot: `tests/ui-widechars.test.ts:50` uses only `U+1F300+` emoji; there is no
   dingbat/misc-symbol sample, so the independent-width harness never catches U+2705.
-- **Status:** being fixed separately. An **uncommitted working-tree change** to
-  `extensions/ui/ui-kit.ts` is present at the time of writing (20 lines added, 106 removed): it
-  drops the local `isZeroWidth`/`isWide`/`charWidth` width model, imports pi-tui's
-  `visibleWidth` and `truncateToWidth`, re-exports `visibleWidth`, and reimplements
-  `truncateAnsi` as a thin wrapper over `truncateToWidth` — its own comment names U+2705 as the
-  cause. That is the correct direction (measure with the exact engine pi validates against).
-  This doc does not touch it and commits only itself. Remaining follow-up for that owner: add a
-  U+2705 case to `tests/ui-widechars.test.ts` so the harness would have caught it.
+- **Status: FIXED** (commit `fb94550`, "fix(ui): measure widths with pi-tui's own
+  engine, not a local model"). `extensions/ui/ui-kit.ts` now drops the local
+  `isZeroWidth`/`isWide`/`charWidth` model, imports pi-tui's `visibleWidth` and
+  `truncateToWidth`, re-exports `visibleWidth`, and implements `truncateAnsi` as a
+  thin wrapper over `truncateToWidth` — measuring with the exact engine pi
+  validates against. The test blind spot is closed: `tests/ui-widechars.test.ts`
+  now renders `System operational. ✅` (plus VS16/ZWJ/CJK samples) through the real
+  card path at 20/40/80/120 and asserts each line's width by the real engine; on
+  the old model it fails with `real pi-tui width 21 > 20`. The runner aliases
+  pi-tui to the real installed engine (`tests/lib-pi-tui.sh`).
 
 ## Explicit unknowns
 
