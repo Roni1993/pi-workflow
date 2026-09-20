@@ -65,8 +65,20 @@ for (const width of WIDTHS) {
   }
 }
 
-// Defensive: registration must never throw when the agent module cannot be
-// resolved (headless bundle marks it external) or the pi surface is odd.
+// Registration is synchronous: the built-in replacements must all be in the
+// registry the moment registerTools() returns, so they cannot race pi's startup.
+{
+  const registered: string[] = []
+  registerTools({ registerTool: (t: any) => registered.push(t.name) } as any)
+  assert.deepStrictEqual(
+    registered.sort(),
+    ["bash", "edit", "find", "grep", "ls", "read", "write"],
+    `synchronous registration missed tools: ${registered.join(",")}`,
+  )
+  bump()
+}
+
+// Defensive: registration must never throw when the pi surface is odd.
 assert.doesNotThrow(() => registerTools({} as any))
 bump()
 assert.doesNotThrow(() => registerTools({ registerTool: () => {} } as any))

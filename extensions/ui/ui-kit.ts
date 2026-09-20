@@ -1,8 +1,10 @@
 // Shared prototype UI kit — matugen palette, colour helpers, card primitives.
 // Port of pi-opencode-ui/lib/ui-kit.ts. The one change: visibleWidth is local
-// (ANSI-stripped code-point count) so this module is headlessly testable and
-// dependency-free. Code-point counting also gives the Powerline PUA glyphs the
-// width-1 compensation the locked design needs.
+// (ANSI-stripped display width) so this module is headlessly testable and
+// dependency-free. Display width is what the terminal actually advances, so a
+// CJK/emoji line is counted as 2 cells per glyph and the width guard cannot be
+// fooled by code-point counting. Powerline PUA glyphs (U+E0B0/U+E0B2) stay at
+// width 1 — the deliberate compensation the locked design needs.
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
@@ -23,9 +25,57 @@ export const FALLBACK = {
 }
 export type Role = keyof typeof FALLBACK
 
-/** Visible cell width: strip ANSI SGR sequences, then count code points. */
+/** Zero-width code points: combining marks, zero-width joiners/spaces, VS15/16. */
+function isZeroWidth(cp: number): boolean {
+  return (
+    (cp >= 0x0300 && cp <= 0x036f) || // combining diacritical marks
+    (cp >= 0x1ab0 && cp <= 0x1aff) || // combining diacritical marks extended
+    (cp >= 0x1dc0 && cp <= 0x1dff) || // combining diacritical marks supplement
+    (cp >= 0x20d0 && cp <= 0x20ff) || // combining marks for symbols
+    (cp >= 0xfe00 && cp <= 0xfe0f) || // variation selectors
+    (cp >= 0xfe20 && cp <= 0xfe2f) || // combining half marks
+    cp === 0x200b || // zero width space
+    cp === 0x200c || // zero width non-joiner
+    cp === 0x200d || // zero width joiner
+    cp === 0xfeff // zero width no-break space
+  )
+}
+
+/**
+ * East Asian Wide/Fullwidth + emoji-presentation ranges (2 cells).
+ * Powerline PUA (U+E0B0/U+E0B2) deliberately NOT here: they stay 1 cell.
+ */
+function isWide(cp: number): boolean {
+  return (
+    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
+    (cp >= 0x2e80 && cp <= 0x303e) || // CJK radicals/Kangxi
+    (cp >= 0x3041 && cp <= 0x33ff) || // Hiragana..CJK compat
+    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK ext A
+    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK unified
+    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
+    (cp >= 0xac00 && cp <= 0xd7a3) || // Hangul syllables
+    (cp >= 0xf900 && cp <= 0xfaff) || // CJK compat ideographs
+    (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK compat forms
+    (cp >= 0xff00 && cp <= 0xff60) || // fullwidth forms
+    (cp >= 0xffe0 && cp <= 0xffe6) || // fullwidth signs
+    (cp >= 0x1f300 && cp <= 0x1faff) || // emoji & pictographs (+ supplemental)
+    (cp >= 0x1f900 && cp <= 0x1f9ff) || // supplemental symbols & pictographs
+    (cp >= 0x20000 && cp <= 0x3fffd) // CJK ext B..F
+  )
+}
+
+/** Display width of ONE code point, in terminal cells. */
+export function charWidth(cp: number): number {
+  if (isZeroWidth(cp)) return 0
+  if (isWide(cp)) return 2
+  return 1
+}
+
+/** Visible cell width: strip ANSI SGR sequences, then sum per-code-point widths. */
 export function visibleWidth(s: string): number {
-  return [...s.replace(/\x1b\[[0-9;]*m/g, "")].length
+  let total = 0
+  for (const ch of s.replace(/\x1b\[[0-9;]*m/g, "")) total += charWidth(ch.codePointAt(0)!)
+  return total
 }
 
 export function loadMatugen(): Record<Role, string> {
@@ -140,8 +190,9 @@ export function card(width: number, pair: Pair, content: string[], buffer = 1): 
 }
 
 /**
- * ANSI-aware truncate to `width` visible columns, counted by code point (so the
- * Powerline PUA glyphs are 1 cell, matching the terminal). Always ends in RESET.
+ * ANSI-aware truncate to `width` visible columns, counted by display width (CJK
+ * and emoji are 2 cells, combining marks 0; Powerline PUA stays 1). A wide glyph
+ * is never split and a line never ends on half of one. Always ends in RESET.
  * This is the width-safety guard: every rendered line must pass through it or
  * pi exits with "Rendered line N exceeds terminal width".
  */
@@ -156,12 +207,20 @@ export function truncateAnsi(line: string, width: number): string {
   let last = 0
   let m: RegExpExecArray | null
   const style = () => (fg ?? "") + (bg ?? "") + (boldOn ? "\x1b[1m" : "")
+  let stopped = false
   const push = (text: string) => {
-    if (!text || col >= width) return
-    const chars = [...text]
-    const take = chars.slice(0, width - col).join("")
-    out += style() + take
-    col += Math.min(chars.length, width - col)
+    if (!text || stopped || col >= width) return
+    let take = ""
+    for (const ch of text) {
+      const w = charWidth(ch.codePointAt(0)!)
+      if (col + w > width) {
+        stopped = true // never emit a glyph that would overflow, nor skip past it
+        break
+      }
+      take += ch
+      col += w
+    }
+    if (take) out += style() + take
   }
   while ((m = re.exec(line))) {
     push(line.slice(last, m.index))
@@ -177,8 +236,8 @@ export function truncateAnsi(line: string, width: number): string {
       else if (c === 38 && codes[i + 1] === 2) { fg = `\x1b[38;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
       else if (c === 48 && codes[i + 1] === 2) { bg = `\x1b[48;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
     }
-    if (col >= width) break
+    if (stopped || col >= width) break
   }
-  if (col < width) push(line.slice(last))
+  if (!stopped && col < width) push(line.slice(last))
   return out + "\x1b[0m"
 }

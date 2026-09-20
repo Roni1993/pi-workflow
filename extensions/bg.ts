@@ -7,7 +7,6 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent"
-import { Text } from "@earendil-works/pi-tui"
 import { currentOwner } from "./ui/live"
 
 const BG_DIR = path.join(os.homedir(), ".pi", "agent", "bg")
@@ -261,10 +260,8 @@ function getAgent(id: string, index: Record<string, BgAgent>): BgAgent {
 }
 
 export default function bgExtension(pi: ExtensionAPI) {
-  pi.registerMessageRenderer("bg-output", (message, _o, theme) => {
-    return new Text(theme.fg("dim", String(message.content)), 0, 0)
-  })
-
+  // Renderer for "bg-output" is owned by extensions/ui/cards.ts (single owner
+  // to avoid a load-order-dependent collision). sendMessage still uses the type.
   const emit = (text: string) => {
     pi.sendMessage({ customType: "bg-output", content: text, display: true })
   }

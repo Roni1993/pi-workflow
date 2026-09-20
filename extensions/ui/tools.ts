@@ -17,7 +17,16 @@
 //   renderShell:"self"), and the latest calls' bodies expanded. A module-level
 //   "recent toolCallIds" list approximates the latest-3-open rule; it is
 //   best-effort only and must never be relied on as exact.
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
+import {
+  createBashTool,
+  createEditTool,
+  createFindTool,
+  createGrepTool,
+  createLsTool,
+  createReadTool,
+  createWriteTool,
+  type ExtensionAPI,
+} from "@earendil-works/pi-coding-agent"
 import { PAL, bold, card, fg, truncateAnsi, visibleWidth } from "./ui-kit"
 
 /** Glyph per tool kind, exactly the prototype map. */
@@ -232,93 +241,84 @@ function summarizeResult(
 
 // ── registration ────────────────────────────────────────────────────────────
 
-/** tool name -> factory export name. */
-const FACTORIES: Array<[string, string]> = [
-  ["bash", "createBashTool"],
-  ["read", "createReadTool"],
-  ["edit", "createEditTool"],
-  ["write", "createWriteTool"],
-  ["find", "createFindTool"],
-  ["grep", "createGrepTool"],
-  ["ls", "createLsTool"],
+/** tool name -> built-in factory (top-level import: registration is synchronous,
+ * so the replacements land BEFORE pi reads the tool registry — no async race). */
+const FACTORIES: Array<[string, (cwd: string, options?: any) => any]> = [
+  ["bash", createBashTool],
+  ["read", createReadTool],
+  ["edit", createEditTool],
+  ["write", createWriteTool],
+  ["find", createFindTool],
+  ["grep", createGrepTool],
+  ["ls", createLsTool],
 ]
 
 export function registerTools(pi: ExtensionAPI): void {
   if (typeof (pi as any)?.registerTool !== "function") return
-  void (async () => {
-    let mod: any
+  for (const [name, factory] of FACTORIES) {
     try {
-      // Dynamic import so the headless render test can import the pure helpers
-      // without resolving @earendil-works/pi-coding-agent.
-      mod = await import("@earendil-works/pi-coding-agent")
-    } catch {
-      return
-    }
-    for (const [name, exportName] of FACTORIES) {
-      try {
-        const factory = mod?.[exportName]
-        if (typeof factory !== "function") continue
-        const original = factory(process.cwd())
-        if (!original) continue
-        const kind = KIND_ALIAS[name] ?? name
-        ;(pi as any).registerTool({
-          name,
-          label: original.label ?? name,
-          description: original.description ?? "",
-          parameters: original.parameters,
-          // Forward every behaviour-bearing field: prompt metadata (keeps the
-          // tool in the system-prompt Available tools section), constrained
-          // sampling, prepareArguments (edit normalizes arg shapes through it)
-          // and executionMode.
-          promptSnippet: original.promptSnippet,
-          promptGuidelines: original.promptGuidelines,
-          constrainedSampling: original.constrainedSampling,
-          prepareArguments: original.prepareArguments,
-          executionMode: original.executionMode,
-          renderShell: "self",
-          execute: (...a: any[]) => (original.execute as any)(...a),
-          renderCall: (args: any, _theme: any, context: any) => {
-            const id = context?.toolCallId
-            if (typeof id === "string") noteRecent(id)
-            const summary =
-              (typeof id === "string" ? SUMMARY.get(id) : undefined) ?? argSummary(name, args)
-            const detail = argDetail(name, args)
-            const display = name.charAt(0).toUpperCase() + name.slice(1)
-            return {
-              render: (width: number) => renderToolRow(kind, display, detail, summary, width),
-              invalidate: () => {},
-            }
-          },
-          renderResult: (result: any, options: any, _theme: any, context: any) => {
-            const id = context?.toolCallId
-            let summary = ""
-            let body: ToolBodyInput = []
+      if (typeof factory !== "function") continue
+      const original = factory(process.cwd())
+      if (!original) continue
+      const kind = KIND_ALIAS[name] ?? name
+      ;(pi as any).registerTool({
+        name,
+        label: original.label ?? name,
+        description: original.description ?? "",
+        parameters: original.parameters,
+        // Forward every behaviour-bearing field: prompt metadata (keeps the
+        // tool in the system-prompt Available tools section), constrained
+        // sampling, prepareArguments (edit normalizes arg shapes through it)
+        // and executionMode.
+        promptSnippet: original.promptSnippet,
+        promptGuidelines: original.promptGuidelines,
+        constrainedSampling: original.constrainedSampling,
+        prepareArguments: original.prepareArguments,
+        executionMode: original.executionMode,
+        renderShell: "self",
+        execute: (...a: any[]) => (original.execute as any)(...a),
+        renderCall: (args: any, _theme: any, context: any) => {
+          const id = context?.toolCallId
+          if (typeof id === "string") noteRecent(id)
+          const summary =
+            (typeof id === "string" ? SUMMARY.get(id) : undefined) ?? argSummary(name, args)
+          const detail = argDetail(name, args)
+          const display = name.charAt(0).toUpperCase() + name.slice(1)
+          return {
+            render: (width: number) => renderToolRow(kind, display, detail, summary, width),
+            invalidate: () => {},
+          }
+        },
+        renderResult: (result: any, options: any, _theme: any, context: any) => {
+          const id = context?.toolCallId
+          let summary = ""
+          let body: ToolBodyInput = []
+          try {
+            const s = summarizeResult(name, result)
+            summary = s.summary
+            body = s.body
+          } catch {
+            // unknown result shape — render nothing extra
+          }
+          if (typeof id === "string" && summary && SUMMARY.get(id) !== summary) {
+            SUMMARY.set(id, summary)
             try {
-              const s = summarizeResult(name, result)
-              summary = s.summary
-              body = s.body
+              context?.invalidate?.()
             } catch {
-              // unknown result shape — render nothing extra
+              // renderer must never throw into pi's render loop
             }
-            if (typeof id === "string" && summary && SUMMARY.get(id) !== summary) {
-              SUMMARY.set(id, summary)
-              try {
-                context?.invalidate?.()
-              } catch {
-                // renderer must never throw into pi's render loop
-              }
-            }
-            const expanded = !!options?.expanded || !!context?.expanded || isRecent(id)
-            if (!expanded) return EMPTY
-            return {
-              render: (width: number) => renderToolBody(kind, body, width),
-              invalidate: () => {},
-            }
-          },
-        })
-      } catch {
-        // A missing/renamed/new built-in must never break registration.
-      }
+          }
+          const expanded = !!options?.expanded || !!context?.expanded || isRecent(id)
+          if (!expanded) return EMPTY
+          return {
+            render: (width: number) => renderToolBody(kind, body, width),
+            invalidate: () => {},
+          }
+        },
+      })
+    } catch {
+      // A missing/renamed/new built-in must never break registration.
     }
-  })()
+  }
 }
+

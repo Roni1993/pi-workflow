@@ -7,7 +7,6 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent"
-import { Text } from "@earendil-works/pi-tui"
 
 const WORKFLOW_DIR = path.join(os.homedir(), ".pi", "agent", "pi-workflow")
 const PIPELINES = path.join(WORKFLOW_DIR, "pipelines", "index.json")
@@ -235,9 +234,8 @@ function log(p: Pipeline, msg: string): void {
 }
 
 export default function pipelineExtension(pi: ExtensionAPI) {
-  pi.registerMessageRenderer("pipe-output", (message, _o, theme) => {
-    return new Text(theme.fg("dim", String(message.content)), 0, 0)
-  })
+  // Renderer for "pipe-output" is owned by extensions/ui/cards.ts (single owner
+  // to avoid a load-order-dependent collision). sendMessage still uses the type.
   const emit = (text: string) => {
     pi.sendMessage({ customType: "pipe-output", content: text, display: true })
   }
