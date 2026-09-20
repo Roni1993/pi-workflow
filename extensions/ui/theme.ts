@@ -28,14 +28,14 @@ function apply(ctx: ExtensionContext | undefined): void {
 }
 
 export function registerTheme(pi: ExtensionAPI): void {
-  pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => apply(ctx))
-
+  // Do NOT apply on session_start: it fires before resources_discover, so the
+  // theme registry is still empty and pi prints "Theme not found: opencode".
+  // Register the theme path, then select it on a short backoff once the
+  // registry has consumed themePaths.
   pi.on("resources_discover", (_event: unknown, ctx: ExtensionContext) => {
     const dir = themeDir()
     if (!dir) return undefined
-    // The theme registry consumes themePaths after this handler returns; retry
-    // the selection once so it lands on the newly-discovered theme.
-    setTimeout(() => apply(ctx), 200)
+    for (const ms of [150, 600, 1500]) setTimeout(() => apply(ctx), ms)
     return { themePaths: [dir] }
   })
 }
