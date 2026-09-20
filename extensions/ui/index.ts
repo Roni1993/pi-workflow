@@ -11,6 +11,7 @@ import { registerTheme } from "./theme"
 import { registerChrome } from "./chrome"
 import { registerResources } from "./resources"
 import { registerEditor } from "./editor"
+import { registerSelectors } from "./selectors"
 import { PAL, card, fg, bold, truncateAnsi } from "./ui-kit"
 
 /** Standalone component that renders a sample card, width-guarded. */
@@ -58,5 +59,6 @@ export default function (pi: ExtensionAPI) {
   registerChrome(pi)
   registerResources(pi)
   registerEditor(pi)
+  registerSelectors(pi)
   registerUiKit(pi)
 }
