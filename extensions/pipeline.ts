@@ -7,6 +7,71 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent"
+import { askQuestions, type Answer, type Question } from "./ui/questions"
+
+/**
+ * HITL grill shown before a pipeline starts. The old flow asked two free-text
+ * `ui.input` prompts; the modal is the same information with the opencode look.
+ * Criteria has no sensible preset, so it is answer-only (the focused "Type
+ * something." row). Constraints offers "none" so it can be picked in one key.
+ */
+const GRILL_QUESTIONS: Question[] = [
+  {
+    header: "Acceptance criteria",
+    question: "Acceptance criteria (contracts & BDD)? — e.g. given X when Y then Z; comma-separated",
+    options: [],
+  },
+  {
+    header: "Constraints",
+    question: "Constraints / out-of-scope?",
+    options: [{ label: "none", desc: "no extra constraints", preview: ["(nothing beyond the statement)"] }],
+  },
+]
+
+/** Flatten one modal answer back to the plain string `ctx.ui.input` used to return. */
+function answerText(answers: Answer[], header: string): string {
+  const a = answers.find((x) => x.header === header)
+  if (!a) return ""
+  const parts = [...a.selected]
+  if (a.custom) parts.push(a.custom)
+  return parts.join(", ")
+}
+
+/**
+ * Ask the pre-flight grill. Returns the SAME `{ criteria, constraints }` plain
+ * strings the old `ctx.ui.input` pair produced, so the pipeline's downstream
+ * `statement`/log contract is unchanged.
+ *
+ * Fallbacks (the pipeline must never break):
+ *  - non-TUI modes (rpc/print/json) use the old text prompts — the modal is
+ *    terminal-only.
+ *  - if the modal throws (unpatched/missing overlay, any ui.custom failure) we
+ *    fall through to the old text prompts inside the catch.
+ *  - a cancelled modal (answers === null) maps to "" just like a cancelled
+ *    `ui.input`, which the call site already renders as "(as I judge best)"/"none".
+ */
+async function grill(ctx: ExtensionCommandContext): Promise<{ criteria: string; constraints: string }> {
+  if (ctx.mode === "tui") {
+    try {
+      const answers = await askQuestions(ctx.ui, GRILL_QUESTIONS)
+      if (answers) {
+        return {
+          criteria: answerText(answers, "Acceptance criteria"),
+          constraints: answerText(answers, "Constraints"),
+        }
+      }
+      return { criteria: "", constraints: "" }
+    } catch {
+      // fall through to the plain prompts
+    }
+  }
+  // `?? ""` only narrows undefined→"": the call site already treats both as
+  // falsy and substitutes "(as I judge best)"/"none". Values are NOT trimmed, so
+  // whitespace-only input behaves exactly as the old `ui.input` did.
+  const criteria = await ctx.ui.input("Acceptance criteria (contracts & BDD)?", "e.g. given X when Y then Z; comma-separated")
+  const constraints = await ctx.ui.input("Constraints / out-of-scope?", "none")
+  return { criteria: criteria ?? "", constraints: constraints ?? "" }
+}
 
 const WORKFLOW_DIR = path.join(os.homedir(), ".pi", "agent", "pi-workflow")
 const PIPELINES = path.join(WORKFLOW_DIR, "pipelines", "index.json")
@@ -587,8 +652,7 @@ Fix the concrete issues directly in ${implWork} (edit the files there). Do not o
         )
 
         if (!noGrill) {
-          const criteria = await ctx.ui.input("Acceptance criteria (contracts & BDD)?", "e.g. given X when Y then Z; comma-separated")
-          const constraints = await ctx.ui.input("Constraints / out-of-scope?", "none")
+          const { criteria, constraints } = await grill(ctx)
           const p: Pipeline = {
             id, statement, phase: "planning", model, planPath, dir, reviewers: [],
             reviewRound: 0, maxReviewRounds: maxRounds, maxReviewers, stuckMs, doPr,

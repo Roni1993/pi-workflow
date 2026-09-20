@@ -16,8 +16,8 @@
 //   - Width safety is non-negotiable: every line goes through truncateAnsi or
 //     pi exits with "Rendered line exceeds terminal width".
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import type { Component } from "@earendil-works/pi-tui"
-import { PAL, card, fg, truncateAnsi, wrap } from "./ui-kit"
+import { Markdown, type Component, type MarkdownTheme } from "@earendil-works/pi-tui"
+import { M, PAL, type Pair, bold, card, fg, tinted, truncateAnsi, wrap } from "./ui-kit"
 
 /** Parsed view of a turn: plain text + the text of every thinking block. */
 export interface TranscriptParts {
@@ -76,6 +76,80 @@ function bodyLines(text: string, inner: number): string[] {
 }
 
 /**
+ * Markdown theme for the card body. pi's stock `getMarkdownTheme()` pulls the
+ * interactive theme's own colours; inside this card we style with the matugen
+ * palette instead. Every function uses `fg()` (or a reset-pair SGR), which
+ * resets *foreground only* (`\x1b[39m`) — never a full `\x1b[0m` reset — so the
+ * tinted card background opened later by `cardLine` survives every inline
+ * reset. `bold()` is ui-kit's `\x1b[1m…\x1b[22m` pair.
+ */
+const MARKDOWN_THEME: MarkdownTheme = {
+  heading: (t) => bold(fg(PAL.text, t)),
+  link: (t) => fg(M.primary, t),
+  linkUrl: (t) => fg(PAL.dim, t),
+  code: (t) => fg(M.tertiary, t),
+  codeBlock: (t) => fg(PAL.text, t),
+  codeBlockBorder: (t) => fg(PAL.ctx, t),
+  quote: (t) => fg(PAL.dim, t),
+  quoteBorder: (t) => fg(PAL.ctx, t),
+  hr: (t) => fg(PAL.ctx, t),
+  listBullet: (t) => fg(M.primary, t),
+  bold: (t) => bold(t),
+  italic: (t) => `\x1b[3m${t}\x1b[23m`,
+  underline: (t) => `\x1b[4m${t}\x1b[24m`,
+  strikethrough: (t) => `\x1b[9m${t}\x1b[29m`,
+}
+
+/**
+ * Render a markdown string into the card's content width via pi-tui's own
+ * `Markdown` component (the same renderer stock `AssistantMessageComponent`
+ * uses; bundled with the real pi-tui that validates line widths). `paddingX=0`
+ * keeps every line inside the card; `defaultTextStyle.color` re-applies
+ * `PAL.text` after each inline reset (inline code, links, …) instead of letting
+ * it fall back to the terminal default. Trailing pad spaces are trimmed — the
+ * card adds its own full-width tinted padding. Lines are not width-guarded here;
+ * every caller runs `truncateAnsi` over the finished card.
+ */
+function markdownLines(text: string, width: number): string[] {
+  const inner = Math.max(1, width - 2)
+  let rendered: string[]
+  try {
+    rendered = new Markdown(text.replace(/\r/g, ""), 0, 0, MARKDOWN_THEME, {
+      color: (t) => fg(PAL.text, t),
+    }).render(inner)
+  } catch {
+    return bodyLines(text, inner).map((l) => fg(PAL.text, l))
+  }
+  return rendered.map((l) => (l ? fg(PAL.text, l.replace(/ +$/, "")) : ""))
+}
+
+/**
+ * Short placeholder for a known non-text block. `image`/`diff` are surfaced as
+ * one dim line rather than dropped silently; unknown/toolCall blocks are left
+ * to pi's own inline rendering and return undefined.
+ */
+function placeholderFor(block: Block): string | undefined {
+  if (block.type === "image") {
+    const mime = typeof (block as { mimeType?: unknown }).mimeType === "string" ? ` ${(block as { mimeType: string }).mimeType}` : ""
+    return `[image${mime}]`
+  }
+  if (block.type === "diff") return "[diff]"
+  return undefined
+}
+
+/** Placeholder lines for the known non-text blocks of a turn (image/diff). */
+export function blockPlaceholders(content: unknown): string[] {
+  if (!Array.isArray(content)) return []
+  const out: string[] = []
+  for (const raw of content) {
+    if (!raw || typeof raw !== "object") continue
+    const placeholder = placeholderFor(raw as Block)
+    if (placeholder) out.push(placeholder)
+  }
+  return out
+}
+
+/**
  * Locked user card: `PAL.me` rail + tinted full-width background, min 3 lines
  * (ui-kit `card` buffer). Returns [] for empty content so the caller can fall
  * back to pi's stock rendering.
@@ -88,21 +162,28 @@ export function renderUserCard(text: string, width: number): string[] {
   return card(w, PAL.me, body).map((l) => truncateAnsi(l, w))
 }
 
-/** ONE thoughts box: all thinking blocks expanded, with count + total chars. */
-function thoughtsBox(width: number, thinking: string[]): string[] {
+/**
+ * ONE thoughts box. Collapsed (the default, and what `ctrl+o` toggles) shows
+ * only the header; expanded shows every thinking block. The hint reflects the
+ * actual state so it is not a lie.
+ */
+function thoughtsBox(width: number, thinking: string[], expanded: boolean): string[] {
   const total = thinking.reduce((a, t) => a + t.length, 0)
+  const hint = expanded ? "(ctrl+o collapse)" : "(ctrl+o expand)"
   const body: string[] = [
     fg(PAL.think.rail, "✦ ") +
       fg(PAL.text, `Thoughts · ${thinking.length}`) +
-      fg(PAL.dim, `   ${total} chars   (ctrl+o expand)`),
+      fg(PAL.dim, `   ${total} chars   ${hint}`),
   ]
-  for (const t of thinking) {
-    const lines = bodyLines(String(t ?? ""), width - 5)
-    if (!lines.length || (lines.length === 1 && lines[0] === "")) {
-      body.push(fg(PAL.dim, "  (empty)"))
-      continue
+  if (expanded) {
+    for (const t of thinking) {
+      const lines = bodyLines(String(t ?? ""), width - 5)
+      if (!lines.length || (lines.length === 1 && lines[0] === "")) {
+        body.push(fg(PAL.dim, "  (empty)"))
+        continue
+      }
+      for (const l of lines) body.push(fg(PAL.dim, "  ") + fg(PAL.text, l))
     }
-    for (const l of lines) body.push(fg(PAL.dim, "  ") + fg(PAL.text, l))
   }
   return card(width, PAL.think, body)
 }
@@ -112,16 +193,97 @@ function thoughtsBox(width: number, thinking: string[]): string[] {
  * `PAL.think` box below it. Returns [] when there is nothing renderable.
  * `content` may be a string or a ContentBlock[].
  */
-export function renderAssistantCard(content: unknown, width: number): string[] {
+export function renderAssistantCard(content: unknown, width: number, expanded = false): string[] {
   const w = Math.max(4, Math.floor(width))
   const { text, thinking } = blocksToParts(content)
+  const placeholders = blockPlaceholders(content)
+  const body = text.trim() ? markdownLines(text, w) : []
+  if (text.trim() && placeholders.length) body.push("")
+  for (const p of placeholders) body.push(fg(PAL.dim, p))
+
   const out: string[] = []
-  if (text.trim()) out.push(...card(w, PAL.agent, bodyLines(text, w - 3).map((l) => fg(PAL.text, l))))
+  if (body.some((l) => l.trim())) out.push(...card(w, PAL.agent, body))
   if (thinking.length) {
     if (out.length) out.push("")
-    out.push(...thoughtsBox(w, thinking))
+    out.push(...thoughtsBox(w, thinking, expanded))
   }
   return out.map((l) => truncateAnsi(l, w))
+}
+
+/** Which built-in summary a message is. */
+export type SummaryKind = "compactionSummary" | "branchSummary"
+
+/** Hue for the compaction / branch summary cards (distinct from turn cards). */
+export const SUMMARY_PAIRS: Record<SummaryKind, Pair> = {
+  compactionSummary: { rail: M.cyan, bg: tinted(M.cyan) },
+  branchSummary: { rail: M.magenta, bg: tinted(M.magenta) },
+}
+
+const SUMMARY_LABEL: Record<SummaryKind, string> = {
+  compactionSummary: "[compaction]",
+  branchSummary: "[branch]",
+}
+
+/**
+ * Card for a compaction/branch summary message. Collapsed (stock default) shows
+ * only the label + meta line; expanded (ctrl+o) renders the summary through the
+ * same markdown path as the assistant card. Returns [] when the message is
+ * unrecognisable so a caller can fall back to stock.
+ *
+ * NOTE: no call site routes these roles through the T7 seam yet — see
+ * `registerTranscript`. This is the render half, ready to wire.
+ */
+export function renderSummaryCard(message: unknown, width: number, expanded = false): string[] {
+  if (!message || typeof message !== "object") return []
+  const m = message as { summary?: unknown; tokensBefore?: unknown; fromId?: unknown }
+  const kind: SummaryKind = "tokensBefore" in m ? "compactionSummary" : "branchSummary"
+  const w = Math.max(4, Math.floor(width))
+  const summary = String(m.summary ?? "").replace(/\r/g, "")
+  if (!summary.trim()) return []
+
+  const pair = SUMMARY_PAIRS[kind]
+  const body: string[] = [fg(pair.rail, bold(SUMMARY_LABEL[kind]))]
+  if (kind === "compactionSummary") {
+    const tokens = Number(m.tokensBefore)
+    const tokenStr = Number.isFinite(tokens) ? tokens.toLocaleString("en-US") : "?"
+    body.push(fg(PAL.dim, `Compacted from ${tokenStr} tokens${expanded ? "" : " (ctrl+o to expand)"}`))
+  } else {
+    body.push(fg(PAL.dim, expanded ? "Branch summary" : "Branch summary (ctrl+o to expand)"))
+  }
+
+  if (expanded) {
+    body.push("")
+    body.push(...markdownLines(summary, w))
+  }
+  return card(w, pair, body).map((l) => truncateAnsi(l, w))
+}
+
+/** Component wrapper: honours the seam's `setExpanded` forwarding. */
+class SummaryCard implements Component {
+  private expanded = false
+  private cached?: string[]
+  private cachedWidth?: number
+
+  constructor(private message: unknown) {}
+
+  setExpanded(expanded = false): void {
+    if (this.expanded === expanded) return
+    this.expanded = expanded
+    this.invalidate()
+  }
+  setOutputPad(): void {}
+
+  invalidate(): void {
+    this.cached = undefined
+    this.cachedWidth = undefined
+  }
+
+  render(width: number): string[] {
+    if (this.cached && this.cachedWidth === width) return this.cached
+    this.cachedWidth = width
+    this.cached = renderSummaryCard(this.message, width, this.expanded)
+    return this.cached
+  }
 }
 
 /** Pull `content` off a pi message; tolerate a bare content value. */
@@ -147,6 +309,7 @@ class TranscriptTurn implements Component {
     private readonly kind: "user" | "assistant",
     private message: unknown,
     private streaming = false,
+    private expanded = false,
   ) {}
 
   /** Streaming seam hook: same instance, grown message. */
@@ -155,7 +318,13 @@ class TranscriptTurn implements Component {
     this.streaming = streaming
     this.invalidate()
   }
-  setExpanded(): void {}
+
+  /** `ctrl+o` toggle: the seam calls this with the new expansion state. */
+  setExpanded(expanded = false): void {
+    if (this.expanded === expanded) return
+    this.expanded = expanded
+    this.invalidate()
+  }
   setOutputPad(): void {}
 
   invalidate(): void {
@@ -171,7 +340,7 @@ class TranscriptTurn implements Component {
       lines =
         this.kind === "user"
           ? renderUserCard(plainText(content), width)
-          : renderAssistantCard(content, width)
+          : renderAssistantCard(content, width, this.expanded)
     } catch {
       lines = []
     }
@@ -181,10 +350,10 @@ class TranscriptTurn implements Component {
   }
 }
 
-/** A message is renderable when it has text or at least one thinking block. */
+/** A message is renderable when it has text, thinking, or a known placeholder block. */
 function renderable(content: unknown): boolean {
   const { text, thinking } = blocksToParts(content)
-  return !!text.trim() || thinking.length > 0
+  return !!text.trim() || thinking.length > 0 || blockPlaceholders(content).length > 0
 }
 
 /** The T7 seam adds `isStreaming` to MessageRenderOptions; read it defensively. */
@@ -192,10 +361,27 @@ function isStreaming(options: unknown): boolean {
   return !!(options as { isStreaming?: unknown } | undefined)?.isStreaming
 }
 
+/** The T7 seam passes the `ctrl+o` expansion state as `options.expanded`. */
+function expandedOf(options: unknown): boolean {
+  return !!(options as { expanded?: unknown } | undefined)?.expanded
+}
+
 /**
  * T8 — register the built-in role renderers. A registered renderer with nothing
  * to draw returns undefined so pi keeps its stock component; a throw is caught
  * here too (the seam also swallows throws).
+ *
+ * Compaction/branch summaries (rows 37-38) are registered under the role keys
+ * `"compactionSummary"` / `"branchSummary"` — the exact strings pi switches on.
+ * The registry (`loader.js:274`, `runner.js:425`) accepts any key, so these
+ * entries are stored today, but the INSTALLED T7 seam does NOT consult the
+ * helper in those two cases: `addMessageToChat` builds the stock
+ * `CompactionSummaryMessageComponent` / `BranchSummaryMessageComponent`
+ * directly at `interactive-mode.js:3097-3109` (stock 0.85.1: `:2934-2946`).
+ * They therefore stay inert (pi keeps stock rendering) until the seam patch
+ * routes those cases through `createBuiltinMessageComponent(role, message)` in
+ * fleek-pi-ui. Registering here makes the extension side complete: no further
+ * change to this file is needed once the call sites are patched.
  */
 export function registerTranscript(pi: ExtensionAPI): void {
   if (typeof (pi as { registerMessageRenderer?: unknown })?.registerMessageRenderer !== "function") return
@@ -212,9 +398,21 @@ export function registerTranscript(pi: ExtensionAPI): void {
   pi.registerMessageRenderer("assistant", (message, options) => {
     try {
       if (!renderable(contentOf(message))) return undefined
-      return new TranscriptTurn("assistant", message, isStreaming(options))
+      return new TranscriptTurn("assistant", message, isStreaming(options), expandedOf(options))
     } catch {
       return undefined
     }
   })
+
+  for (const key of ["compactionSummary", "branchSummary"] as const) {
+    pi.registerMessageRenderer(key, (message) => {
+      try {
+        const summary = (message as { summary?: unknown } | null)?.summary
+        if (typeof summary !== "string" || !summary.trim()) return undefined
+        return new SummaryCard(message)
+      } catch {
+        return undefined
+      }
+    })
+  }
 }
