@@ -162,21 +162,28 @@ export function renderUserCard(text: string, width: number): string[] {
   return card(w, PAL.me, body).map((l) => truncateAnsi(l, w))
 }
 
-/** ONE thoughts box: all thinking blocks expanded, with count + total chars. */
-function thoughtsBox(width: number, thinking: string[]): string[] {
+/**
+ * ONE thoughts box. Collapsed (the default, and what `ctrl+o` toggles) shows
+ * only the header; expanded shows every thinking block. The hint reflects the
+ * actual state so it is not a lie.
+ */
+function thoughtsBox(width: number, thinking: string[], expanded: boolean): string[] {
   const total = thinking.reduce((a, t) => a + t.length, 0)
+  const hint = expanded ? "(ctrl+o collapse)" : "(ctrl+o expand)"
   const body: string[] = [
     fg(PAL.think.rail, "✦ ") +
       fg(PAL.text, `Thoughts · ${thinking.length}`) +
-      fg(PAL.dim, `   ${total} chars   (ctrl+o expand)`),
+      fg(PAL.dim, `   ${total} chars   ${hint}`),
   ]
-  for (const t of thinking) {
-    const lines = bodyLines(String(t ?? ""), width - 5)
-    if (!lines.length || (lines.length === 1 && lines[0] === "")) {
-      body.push(fg(PAL.dim, "  (empty)"))
-      continue
+  if (expanded) {
+    for (const t of thinking) {
+      const lines = bodyLines(String(t ?? ""), width - 5)
+      if (!lines.length || (lines.length === 1 && lines[0] === "")) {
+        body.push(fg(PAL.dim, "  (empty)"))
+        continue
+      }
+      for (const l of lines) body.push(fg(PAL.dim, "  ") + fg(PAL.text, l))
     }
-    for (const l of lines) body.push(fg(PAL.dim, "  ") + fg(PAL.text, l))
   }
   return card(width, PAL.think, body)
 }
@@ -186,7 +193,7 @@ function thoughtsBox(width: number, thinking: string[]): string[] {
  * `PAL.think` box below it. Returns [] when there is nothing renderable.
  * `content` may be a string or a ContentBlock[].
  */
-export function renderAssistantCard(content: unknown, width: number): string[] {
+export function renderAssistantCard(content: unknown, width: number, expanded = false): string[] {
   const w = Math.max(4, Math.floor(width))
   const { text, thinking } = blocksToParts(content)
   const placeholders = blockPlaceholders(content)
@@ -198,7 +205,7 @@ export function renderAssistantCard(content: unknown, width: number): string[] {
   if (body.some((l) => l.trim())) out.push(...card(w, PAL.agent, body))
   if (thinking.length) {
     if (out.length) out.push("")
-    out.push(...thoughtsBox(w, thinking))
+    out.push(...thoughtsBox(w, thinking, expanded))
   }
   return out.map((l) => truncateAnsi(l, w))
 }
@@ -226,6 +233,7 @@ class TranscriptTurn implements Component {
     private readonly kind: "user" | "assistant",
     private message: unknown,
     private streaming = false,
+    private expanded = false,
   ) {}
 
   /** Streaming seam hook: same instance, grown message. */
@@ -234,7 +242,13 @@ class TranscriptTurn implements Component {
     this.streaming = streaming
     this.invalidate()
   }
-  setExpanded(): void {}
+
+  /** `ctrl+o` toggle: the seam calls this with the new expansion state. */
+  setExpanded(expanded = false): void {
+    if (this.expanded === expanded) return
+    this.expanded = expanded
+    this.invalidate()
+  }
   setOutputPad(): void {}
 
   invalidate(): void {
@@ -250,7 +264,7 @@ class TranscriptTurn implements Component {
       lines =
         this.kind === "user"
           ? renderUserCard(plainText(content), width)
-          : renderAssistantCard(content, width)
+          : renderAssistantCard(content, width, this.expanded)
     } catch {
       lines = []
     }
@@ -269,6 +283,11 @@ function renderable(content: unknown): boolean {
 /** The T7 seam adds `isStreaming` to MessageRenderOptions; read it defensively. */
 function isStreaming(options: unknown): boolean {
   return !!(options as { isStreaming?: unknown } | undefined)?.isStreaming
+}
+
+/** The T7 seam passes the `ctrl+o` expansion state as `options.expanded`. */
+function expandedOf(options: unknown): boolean {
+  return !!(options as { expanded?: unknown } | undefined)?.expanded
 }
 
 /**
@@ -291,7 +310,7 @@ export function registerTranscript(pi: ExtensionAPI): void {
   pi.registerMessageRenderer("assistant", (message, options) => {
     try {
       if (!renderable(contentOf(message))) return undefined
-      return new TranscriptTurn("assistant", message, isStreaming(options))
+      return new TranscriptTurn("assistant", message, isStreaming(options), expandedOf(options))
     } catch {
       return undefined
     }

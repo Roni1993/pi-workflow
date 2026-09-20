@@ -11,12 +11,21 @@ import { M, type Pair, bgOpen, fgOpen, tinted, truncateAnsi, visibleWidth, RESET
 
 const CHATBOX: Pair = { rail: M.magenta, bg: tinted(M.magenta) }
 
-/** Pure framing: prepend the chatbox rail + background to each editor line. */
+const ANSI = /\x1b\[[0-9;]*m/g
+const BORDER_ONLY = /^[─━═—_-]+$/
+
+/**
+ * Pure framing: prepend the chatbox rail + background to the editor's CONTENT
+ * lines only. The editor draws its own top/bottom borders — framing those too
+ * produced a ragged double box, so borders and blank padding are left intact.
+ */
 export function frameEditorLines(lines: string[], width: number): string[] {
   const w = Math.max(0, Math.floor(width))
   if (w <= 0) return [""]
   const inner = Math.max(0, w - 2)
   return lines.map((line) => {
+    const plain = String(line).replace(ANSI, "").trim()
+    if (!plain || BORDER_ONLY.test(plain)) return truncateAnsi(line, w)
     const body = truncateAnsi(line, inner)
     const pad = Math.max(0, inner - visibleWidth(body))
     return bgOpen(CHATBOX.bg) + fgOpen(CHATBOX.rail) + "▌ " + body + " ".repeat(pad) + RESET

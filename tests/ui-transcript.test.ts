@@ -175,19 +175,38 @@ for (const width of WIDTHS) {
 
 // ── all thinking blocks grouped in ONE thoughts box ─────────────────────────
 for (const width of WIDTHS) {
-  const lines = renderAssistantCard(SAMPLES[4]!.content, width)
+  // Expanded (ctrl+o on): header + every thinking block, in ONE box.
+  const lines = renderAssistantCard(SAMPLES[4]!.content, width, true)
   const joined = lines.join("\n")
   assert.ok(joined.includes(`Thoughts · 3`), `multi-thinking @${width}: missing one 3-block header`)
   checks++
+  if (width >= 80) {
+    assert.ok(joined.includes("(ctrl+o collapse)"), `multi-thinking @${width}: expanded hint wrong`)
+    checks++
+  }
   assert.strictEqual(joined.split("Thoughts ·").length - 1, 1, `multi-thinking @${width}: more than one thoughts box`)
   checks++
-  for (const t of [THINKING_A, THINKING_B, THINKING_C]) {
-    // Wrapping may split a phrase; the first word is always intact.
-    assert.ok(joined.includes(t.split(" ")[0]!), `multi-thinking @${width}: missing thinking text ${JSON.stringify(t.slice(0, 20))}`)
+  // Distinctive tokens that appear ONLY in the thinking blocks (not the body
+  // text): "cache" would false-positive because ASSISTANT_TEXT also has it.
+  for (const tok of ["alone", "configurable", "non-GET"]) {
+    assert.ok(joined.includes(tok), `multi-thinking @${width}: missing thinking token ${JSON.stringify(tok)}`)
     checks++
   }
   assert.ok(joined.includes(ASSISTANT_TEXT.slice(0, 10)), `multi-thinking @${width}: text block missing`)
   checks++
+
+  // Collapsed (default / ctrl+o off): header + honest hint, NO thinking text.
+  const collapsed = renderAssistantCard(SAMPLES[4]!.content, width).join("\n")
+  assert.ok(collapsed.includes("Thoughts · 3"), `multi-thinking @${width}: collapsed header missing`)
+  checks++
+  if (width >= 80) {
+    assert.ok(collapsed.includes("(ctrl+o expand)"), `multi-thinking @${width}: collapsed hint wrong`)
+    checks++
+  }
+  for (const tok of ["alone", "configurable", "non-GET"]) {
+    assert.ok(!collapsed.includes(tok), `multi-thinking @${width}: thinking token leaked while collapsed: ${tok}`)
+    checks++
+  }
 }
 
 // ── markdown is rendered (fences, inline code, lists, links, tables) ────────
