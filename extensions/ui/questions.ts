@@ -72,8 +72,13 @@ const ACCENT = M.secondary
 const ON_ACCENT = mix(M.secondary, "#000000", 0.82)
 const QB: Pair = { rail: M.secondary, bg: tinted(M.secondary) }
 
-/** T9: set true once the pi-tui backdrop patch lands (dims behind the modal). */
-const BACKDROP = false
+/**
+ * T9: dim factor painted over the transcript behind the modal. Must be a NUMBER
+ * strictly between 0 and 1 — the pi-tui patch (`OverlayOptions.backdrop`) treats
+ * boolean/0/1 as no-ops. Only the patched pi 0.85.1 (branch `feat/pi-ui`) reads
+ * it; the stock/npm pi-tui ignores the key entirely, so this is safe either way.
+ */
+const BACKDROP = 0.5
 
 /** Inverted focused row: solid accent background, dark same-hue text, rail unchanged. */
 function invertedLine(width: number, plain: string): string {
@@ -382,9 +387,14 @@ class QuestionsComponent implements Component {
   }
 }
 
-/** T9: the pi-tui backdrop patch reads `backdrop`; unpatched pi-tui ignores it. */
-const overlayOptions: OverlayOptions & { backdrop: boolean } = {
+/**
+ * T9: the pi-tui backdrop patch reads `backdrop`; unpatched pi-tui ignores it.
+ * `width: "100%"` keeps the overlay at full terminal width so the backdrop dims
+ * the whole transcript row, not just the modal's own column span.
+ */
+const overlayOptions: OverlayOptions & { backdrop: number } = {
   anchor: "center",
+  width: "100%",
   maxHeight: "90%",
   backdrop: BACKDROP,
 }

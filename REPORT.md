@@ -1,7 +1,11 @@
-# UI build — REPORT (branch `feat/ui-opencode`)
+# UI build — REPORT (branch `feat/ui-integration`, based on `feat/ui-opencode`)
 
 Implements tickets #26–#30 and #33 of the UI build (#25). The nix half (#31, #32, #34)
 lives on `feat/pi-ui` in the fleek worktree.
+
+This branch adds the "make it real" pass: the pipeline HITL grill now routes
+through the questions modal, the backdrop is on, and the package has an install
+path (not `-e` only). Architecture + run commands: `docs/ui.md`.
 
 ## What is here
 
@@ -14,7 +18,7 @@ plain imports, not separately-loaded extensions).
 | `ui-kit.ts` | T1 | matugen palette, role tints, padded full-width cards, ANSI-aware `truncateAnsi`, local `visibleWidth` (code-point counted, PUA-safe). No pi-tui import, so it is headless-testable. |
 | `live.ts` | T1 | read-only live-state contract (`index.json`, `out.jsonl` tail, tmux liveness), fully defensive. |
 | `dock.ts` | T2 | `/ui-dock` preview + `/dock on\|off` widget below the editor. Chat + dashboard, live-polled, animated thinking rail, timers cleared in `dispose()`. |
-| `questions.ts` | T3 | HITL modal: powerline stepper, preview, inverted focused row, circle-fill multi, note, real typed input via pi-tui `Editor`/`Input`, Submit recap. Exposes `askQuestions(ui, questions)`. |
+| `questions.ts` | T3 | HITL modal: powerline stepper, preview, inverted focused row, circle-fill multi, note, real typed input via pi-tui `Editor`/`Input`, Submit recap. Exposes `askQuestions(ui, questions)`; **used by the pipeline grill** and `/ui-questions`. |
 | `tools.ts` | T4 | re-registers the built-in tools (`bash`/`read`/`edit`/`write`/`find`/`grep`/`ls`) with `renderShell:"self"` and locked rows, delegating `execute` to the built-in factories. |
 | `cards.ts` | T5 | locked cards for the `bg-output` / `pipe-output` / `goal-output` / `jj-output` custom messages (+ durable entries). |
 | `transcript.ts` | T8 | locked user/assistant cards via the T7 seam (`registerMessageRenderer("user"\|"assistant", …)`), all thinking blocks in one box. |
@@ -34,26 +38,71 @@ Every suite renders at widths 20/40/80/120 and asserts no throw and no line wide
 than the terminal (the fatal-crash contract). Bundling uses
 `--alias:@earendil-works/pi-tui=./tests/pi-tui-stub.mjs`.
 
-End-to-end load against the patched pi 0.85.1 (nix half):
+Bundle checks as pi loads them (clean = no output):
 
 ```sh
-pi -ne -e /home/roni/projects/pi-workflow/extensions/ui/index.ts --help   # exit 0, no errors
+npx --yes esbuild@0.23.1 extensions/ui/index.ts --bundle --format=esm --platform=node \
+  --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-tui \
+  --outfile=/tmp/ui.js --log-level=warning
+npx --yes esbuild@0.23.1 extensions/pipeline.ts  --bundle --format=esm --platform=node \
+  --external:@earendil-works/pi-coding-agent --external:@earendil-works/pi-tui \
+  --outfile=/tmp/pipeline.js --log-level=warning   # pipeline has no tests — prove it compiles
 ```
 
-## Known limitations (honest)
+End-to-end load (explicit path, or install the package — see below):
 
-- **No visual TUI verification** was possible headlessly. Behaviour is proven by
-  width tests, the T7 reachability suite, and a real extension-load check — not by
-  pixels. A human should eyeball `/ui-kit`, `/ui-dock`, `/ui-questions` once.
-- **T4 cross-call grouping**: real pi renders one component per tool call, so the
-  prototype's single box wrapping all calls with a blank line between them is not
-  reachable. Achievable look is one card per call; the "latest 3 open" rule is
-  best-effort via a module-level recent-call list.
-- **T3 backdrop dim** is opt-in (`BACKDROP = false` in `questions.ts`); flip it to
-  `true` once the T9 pi-tui patch is in the running pi.
-- **Pipeline HITL integration** is not wired into `extensions/pipeline.ts`; that is
-  the richer questionnaire, issue #22. `askQuestions` is exported for it.
+```sh
+pi -ne -e ./extensions/ui/index.ts --help   # exit 0, no extension errors
+```
+
+## What is now real
+
+- **Pipeline HITL wiring.** `/pipeline` (without `--no-grill`) now asks its
+  acceptance-criteria + constraints questions through the opencode-look modal,
+  not two plain `ctx.ui.input` prompts. The downstream contract is unchanged: the
+  call site still gets two plain strings, `criteria` and `constraints`, exactly
+  as before. The mapping and three fallbacks (non-TUI mode, `askQuestions`
+  throw / missing overlay, cancel) are documented in `docs/ui.md`. The pipeline
+  has no tests, so it is proven by a clean esbuild bundle.
+- **Backdrop on.** `questions.ts` sets `BACKDROP = 0.5` (number strictly between
+  0 and 1) and `width: "100%"` on the overlay; the `backdrop` type is now
+  `number`. Stock pi-tui ignores the key, so this is safe on both builds.
+- **Install path.** The extension is loaded by installing the pi-workflow
+  package (`pi install ./path/to/pi-workflow`, or via fleek's `pi.nix`
+  activation), not `-e` only. `package.json` already declares
+  `"pi": { "extensions": ["./extensions"] }`, so one install loads
+  `pipeline.ts` + `ui/`. Instructions: `docs/ui.md`.
+
+## Still pending (honest)
+
+- **Patched pi not switched into the active profile.** The active `pi` on `PATH`
+  is stock **0.81.1**; the patched **0.85.1** (`feat/pi-ui` in the fleek
+  worktree) is built but not yet wired into the running profile. So on the
+  active binary the backdrop does not dim (key ignored, graceful) and the
+  transcript cards do not render (no seam). The modal + pipeline grill work on
+  both. Switching the profile is a fleek/home-manager change — out of scope here.
+- **No pixel verification.** No visual TUI check was possible headlessly.
+  Behaviour is proven by width suites, the T7 reachability suite, and a real
+  extension-load check — not by pixels. A human should eyeball `/ui-kit`,
+  `/ui-dock`, `/ui-questions`, and one `/pipeline` run once.
+- **T4 cross-call grouping.** Real pi renders one component per tool call, so the
+  prototype's single box wrapping all calls is not reachable. The "latest 3 open"
+  rule is best-effort via a module-level recent-call list. See `tools.ts`.
+- **`--pr` is still manual.** `finishClean` records the intent; it does not
+  create a PR. Unchanged by this branch.
+
+## Install (persistent)
+
+```sh
+pi install ./path/to/pi-workflow     # package.json pi.extensions loads pipeline.ts + ui/
+pi list | grep pi-workflow           # verify
+```
+
+Or via fleek's `pi.nix` `home.activation` loop (installs
+`git:github.com/Roni1993/pi-workflow`). Two branch prerequisites: `feat/ui-opencode`
+for the extension, and `feat/pi-ui` (fleek worktree) for the patched 0.85.1 pi that
+the transcript seam + backdrop need. Full detail: `docs/ui.md`.
 
 ## Do not merge
 
-Work is committed and pushed on `feat/ui-opencode` only. No merge.
+Work is committed on `feat/ui-integration` only. No merge.
