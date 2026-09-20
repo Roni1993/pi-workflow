@@ -7,6 +7,9 @@ import { registerQuestions } from "./questions"
 import { registerTools } from "./tools"
 import { registerCards } from "./cards"
 import { registerTranscript } from "./transcript"
+import { registerTheme } from "./theme"
+import { registerChrome } from "./chrome"
+import { registerResources } from "./resources"
 import { PAL, card, fg, bold, truncateAnsi } from "./ui-kit"
 
 /** Standalone component that renders a sample card, width-guarded. */
@@ -50,5 +53,8 @@ export default function (pi: ExtensionAPI) {
   registerTools(pi)
   registerCards(pi)
   registerTranscript(pi)
+  registerTheme(pi)
+  registerChrome(pi)
+  registerResources(pi)
   registerUiKit(pi)
 }
