@@ -32,6 +32,30 @@ export function renderFooter(width: number, info: FooterInfo): string[] {
   return [spread(w, left, right)]
 }
 
+/**
+ * opencode-look working state: a slow, terminal-independent spinner plus an
+ * honest label. `setWorkingIndicator` frames are rendered verbatim by pi, so the
+ * glyph is styled here with the palette; `setWorkingMessage` and
+ * `setHiddenThinkingLabel` are separate hooks (0.85.1 `TYPES:82,95`) and are
+ * feature-detected so stock/older pi no-ops.
+ */
+export const WORKING_FRAMES = ["◐", "◓", "◑", "◒"].map((f) => fg(PAL.me.rail, f))
+export const WORKING_MESSAGE = "Working..."
+export const HIDDEN_THINKING_LABEL = "Thinking"
+
+export function applyWorkingHooks(ui: Partial<ExtensionUIContext> | undefined): void {
+  if (!ui) return
+  try {
+    if (typeof ui.setWorkingIndicator === "function") {
+      ui.setWorkingIndicator({ frames: WORKING_FRAMES, intervalMs: 120 })
+    }
+    if (typeof ui.setWorkingMessage === "function") ui.setWorkingMessage(WORKING_MESSAGE)
+    if (typeof ui.setHiddenThinkingLabel === "function") ui.setHiddenThinkingLabel(HIDDEN_THINKING_LABEL)
+  } catch {
+    // stock pi / partial ui context: keep whatever pi already had
+  }
+}
+
 function gitBranch(cwd: string): string | undefined {
   try {
     const out = execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
@@ -80,9 +104,7 @@ export function registerChrome(pi: ExtensionAPI): void {
         const model = ctx?.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined
         ui.setFooter(() => memoryComponent((w) => renderFooter(w, { cwd, branch, model })))
       }
-      if (typeof ui.setWorkingIndicator === "function") {
-        ui.setWorkingIndicator({ frames: ["◐", "◓", "◑", "◒"] })
-      }
+      applyWorkingHooks(ui)
     } catch {
       // any hook failure must never take down pi
     }
