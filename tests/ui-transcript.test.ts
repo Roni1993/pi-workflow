@@ -6,6 +6,7 @@ import {
   blocksToParts,
   registerTranscript,
   renderAssistantCard,
+  renderSummaryCard,
   renderUserCard,
 } from "../extensions/ui/transcript.ts"
 import { visibleWidth } from "../extensions/ui/ui-kit.ts"
@@ -285,6 +286,54 @@ for (const width of WIDTHS) {
   }
 }
 
+// ── compaction / branch summary cards ───────────────────────────────────────
+{
+  const compaction = { role: "compactionSummary", summary: MD_MARKDOWN, tokensBefore: 12345, timestamp: 0 }
+  const branch = { role: "branchSummary", summary: "explored the cache branch", fromId: "abc", timestamp: 0 }
+  // Single tokens that survive markdown rendering AND wrapping at width 20
+  // (headings lose their `#`; multi-word body lines split across lines).
+  const BODY_TOKENS: Record<string, string> = { compactionSummary: "30_000", branchSummary: "explored" }
+
+  for (const width of WIDTHS) {
+    for (const msg of [compaction, branch]) {
+      const collapsed = renderSummaryCard(msg, width)
+      assert.ok(collapsed.length > 0, `summary @${width}: nothing rendered`)
+      checks++
+      for (const l of collapsed) {
+        assert.ok(visibleWidth(l) <= width, `summary @${width}: ${visibleWidth(l)} > ${width}`)
+        checks++
+      }
+      // Collapsed hides the summary body and offers the ctrl+o hint.
+      assert.ok(!plain(collapsed.join("\n")).includes(BODY_TOKENS[msg.role]!), `summary @${width}: body leaked while collapsed`)
+      checks++
+      if (width >= 60) {
+        assert.ok(collapsed.join("\n").includes("ctrl+o to expand"), `summary @${width}: expand hint missing`)
+        checks++
+      }
+
+      const expanded = renderSummaryCard(msg, width, true)
+      for (const l of expanded) {
+        assert.ok(visibleWidth(l) <= width, `summary expanded @${width}: ${visibleWidth(l)} > ${width}`)
+        checks++
+      }
+      assert.ok(plain(expanded.join("\n")).includes(BODY_TOKENS[msg.role]!), `summary expanded @${width}: body missing when expanded`)
+      checks++
+    }
+  }
+
+  // Labels + token meta identify the kind.
+  assert.ok(plain(renderSummaryCard(compaction, 80).join("\n")).includes("[compaction]"), "compaction label missing")
+  assert.ok(plain(renderSummaryCard(compaction, 80, true).join("\n")).includes("12,345"), "token count missing")
+  assert.ok(plain(renderSummaryCard(branch, 80).join("\n")).includes("[branch]"), "branch label missing")
+  checks += 3
+
+  // Unrecognisable / empty input → [] so a caller can fall back to stock.
+  assert.deepStrictEqual(renderSummaryCard(null, 80), [], "null summary should render nothing")
+  assert.deepStrictEqual(renderSummaryCard(undefined, 80), [], "undefined summary should render nothing")
+  assert.deepStrictEqual(renderSummaryCard({ summary: "" }, 80), [], "empty summary should render nothing")
+  checks += 3
+}
+
 // ── registerTranscript contract: component / undefined fallback ─────────────
 {
   const registered = new Map<string, Function>()
@@ -296,6 +345,28 @@ for (const width of WIDTHS) {
   registerTranscript(pi as never)
   assert.ok(registered.has("user") && registered.has("assistant"), "role renderers not registered")
   checks++
+  assert.ok(
+    registered.has("compactionSummary") && registered.has("branchSummary"),
+    "summary role renderers not registered (exact pi role keys)",
+  )
+  checks++
+
+  // Summary renderers return undefined for empty/invalid payloads so stock pi
+  // would keep its own component (currently the seam never reaches these keys).
+  const compactionRenderer = registered.get("compactionSummary")!
+  const branchRenderer = registered.get("branchSummary")!
+  assert.strictEqual(compactionRenderer({ summary: "" }, { expanded: false }, {}), undefined)
+  assert.strictEqual(branchRenderer({}, { expanded: false }, {}), undefined)
+  checks += 2
+  for (const width of WIDTHS) {
+    const comp = compactionRenderer({ role: "compactionSummary", summary: MD_MARKDOWN, tokensBefore: 999 }, { expanded: true }, {})
+    assert.ok(comp && typeof comp.render === "function", `summary @${width}: no component`)
+    checks++
+    for (const l of comp.render(width)) {
+      assert.ok(visibleWidth(l) <= width, `registered summary @${width}: ${visibleWidth(l)} > ${width}`)
+      checks++
+    }
+  }
 
   const userRenderer = registered.get("user")!
   const assistantRenderer = registered.get("assistant")!

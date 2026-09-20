@@ -17,7 +17,7 @@
 //     pi exits with "Rendered line exceeds terminal width".
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
 import { Markdown, type Component, type MarkdownTheme } from "@earendil-works/pi-tui"
-import { M, PAL, bold, card, fg, truncateAnsi, wrap } from "./ui-kit"
+import { M, PAL, type Pair, bold, card, fg, tinted, truncateAnsi, wrap } from "./ui-kit"
 
 /** Parsed view of a turn: plain text + the text of every thinking block. */
 export interface TranscriptParts {
@@ -210,6 +210,82 @@ export function renderAssistantCard(content: unknown, width: number, expanded = 
   return out.map((l) => truncateAnsi(l, w))
 }
 
+/** Which built-in summary a message is. */
+export type SummaryKind = "compactionSummary" | "branchSummary"
+
+/** Hue for the compaction / branch summary cards (distinct from turn cards). */
+export const SUMMARY_PAIRS: Record<SummaryKind, Pair> = {
+  compactionSummary: { rail: M.cyan, bg: tinted(M.cyan) },
+  branchSummary: { rail: M.magenta, bg: tinted(M.magenta) },
+}
+
+const SUMMARY_LABEL: Record<SummaryKind, string> = {
+  compactionSummary: "[compaction]",
+  branchSummary: "[branch]",
+}
+
+/**
+ * Card for a compaction/branch summary message. Collapsed (stock default) shows
+ * only the label + meta line; expanded (ctrl+o) renders the summary through the
+ * same markdown path as the assistant card. Returns [] when the message is
+ * unrecognisable so a caller can fall back to stock.
+ *
+ * NOTE: no call site routes these roles through the T7 seam yet — see
+ * `registerTranscript`. This is the render half, ready to wire.
+ */
+export function renderSummaryCard(message: unknown, width: number, expanded = false): string[] {
+  if (!message || typeof message !== "object") return []
+  const m = message as { summary?: unknown; tokensBefore?: unknown; fromId?: unknown }
+  const kind: SummaryKind = "tokensBefore" in m ? "compactionSummary" : "branchSummary"
+  const w = Math.max(4, Math.floor(width))
+  const summary = String(m.summary ?? "").replace(/\r/g, "")
+  if (!summary.trim()) return []
+
+  const pair = SUMMARY_PAIRS[kind]
+  const body: string[] = [fg(pair.rail, bold(SUMMARY_LABEL[kind]))]
+  if (kind === "compactionSummary") {
+    const tokens = Number(m.tokensBefore)
+    const tokenStr = Number.isFinite(tokens) ? tokens.toLocaleString("en-US") : "?"
+    body.push(fg(PAL.dim, `Compacted from ${tokenStr} tokens${expanded ? "" : " (ctrl+o to expand)"}`))
+  } else {
+    body.push(fg(PAL.dim, expanded ? "Branch summary" : "Branch summary (ctrl+o to expand)"))
+  }
+
+  if (expanded) {
+    body.push("")
+    body.push(...markdownLines(summary, w))
+  }
+  return card(w, pair, body).map((l) => truncateAnsi(l, w))
+}
+
+/** Component wrapper: honours the seam's `setExpanded` forwarding. */
+class SummaryCard implements Component {
+  private expanded = false
+  private cached?: string[]
+  private cachedWidth?: number
+
+  constructor(private message: unknown) {}
+
+  setExpanded(expanded = false): void {
+    if (this.expanded === expanded) return
+    this.expanded = expanded
+    this.invalidate()
+  }
+  setOutputPad(): void {}
+
+  invalidate(): void {
+    this.cached = undefined
+    this.cachedWidth = undefined
+  }
+
+  render(width: number): string[] {
+    if (this.cached && this.cachedWidth === width) return this.cached
+    this.cachedWidth = width
+    this.cached = renderSummaryCard(this.message, width, this.expanded)
+    return this.cached
+  }
+}
+
 /** Pull `content` off a pi message; tolerate a bare content value. */
 function contentOf(message: unknown): unknown {
   if (message && typeof message === "object" && "content" in (message as Record<string, unknown>)) {
@@ -294,6 +370,18 @@ function expandedOf(options: unknown): boolean {
  * T8 — register the built-in role renderers. A registered renderer with nothing
  * to draw returns undefined so pi keeps its stock component; a throw is caught
  * here too (the seam also swallows throws).
+ *
+ * Compaction/branch summaries (rows 37-38) are registered under the role keys
+ * `"compactionSummary"` / `"branchSummary"` — the exact strings pi switches on.
+ * The registry (`loader.js:274`, `runner.js:425`) accepts any key, so these
+ * entries are stored today, but the INSTALLED T7 seam does NOT consult the
+ * helper in those two cases: `addMessageToChat` builds the stock
+ * `CompactionSummaryMessageComponent` / `BranchSummaryMessageComponent`
+ * directly at `interactive-mode.js:3097-3109` (stock 0.85.1: `:2934-2946`).
+ * They therefore stay inert (pi keeps stock rendering) until the seam patch
+ * routes those cases through `createBuiltinMessageComponent(role, message)` in
+ * fleek-pi-ui. Registering here makes the extension side complete: no further
+ * change to this file is needed once the call sites are patched.
  */
 export function registerTranscript(pi: ExtensionAPI): void {
   if (typeof (pi as { registerMessageRenderer?: unknown })?.registerMessageRenderer !== "function") return
@@ -315,4 +403,16 @@ export function registerTranscript(pi: ExtensionAPI): void {
       return undefined
     }
   })
+
+  for (const key of ["compactionSummary", "branchSummary"] as const) {
+    pi.registerMessageRenderer(key, (message) => {
+      try {
+        const summary = (message as { summary?: unknown } | null)?.summary
+        if (typeof summary !== "string" || !summary.trim()) return undefined
+        return new SummaryCard(message)
+      } catch {
+        return undefined
+      }
+    })
+  }
 }
