@@ -133,10 +133,12 @@ Every stock surface above that uses `theme.fg(...)`/`theme.bg(...)` reads `Theme
 `ThemeBg` (`<store>/.../theme/theme.d.ts:14–15`): footer, editor border, selectors, dialogs,
 thinking text, tool boxes, skill/compaction/branch labels, toasts. Shipping an
 opencode-palette theme (JSON, via `pi.getTheme`/`setTheme` or a package theme file) restyles
-items 11–13, 18, 20–22, 24–35 **without code and without patches**. It cannot restyle the
-dimensions our extension hardcodes (matugen palette in `ui-kit.ts:99`), and it cannot change
-layout, only colour. Recommendation: do the theme first for breadth, then the seams above for
-layout fidelity.
+items 11–13, 18, 21–22, 25–27, 30–35 **without code and without patches**. Corrections to the
+first draft of this claim: it cannot reach the components our extension already owns — 14–17
+(transcript/tools/thinking), 23–24 (custom cards/entries), 28–29 (dock/questions modal) — which
+hardcode the matugen palette (`ui-kit.ts:81`), nor item 20 (skill invocation), whose stock
+component is bypassed by the T7 seam. It cannot change layout, only colour. Recommendation: do
+the theme first for breadth, then the seams above for layout fidelity.
 
 ## Ranked gap list (highest impact first)
 
