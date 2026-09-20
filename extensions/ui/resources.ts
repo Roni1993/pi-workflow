@@ -1,6 +1,20 @@
 // Loaded-resources styling: [Context]/[Skills]/[Prompts]/[Extensions]/[Themes].
 // Consumes the pi-ui `setLoadedResources` seam (patched pi only). On stock pi
 // the hook is absent, so this no-ops and pi keeps its stock sections.
+//
+// Diagnostics (`[Skill conflicts]`, `[Prompt conflicts]`, `[Extension issues]`,
+// `[Theme conflicts]`) are NOT routed through the seam. The seam (`pi-ui:loaded-
+// resources-seam`) intercepts only `addLoadedSection` (installed
+// `interactive-mode.js:1339-1368`; stock 0.85.1 `:1255-1259`). The diagnostics
+// bypass it: `showLoadedResources` calls
+// `this.loadedResourcesContainer.addChild(new Text(\`${theme.fg("warning", …)}…\`))`
+// directly for each of the four blocks (installed `:1473,1479,1496,1502`; stock
+// `:1363,1369,1386,1392`). The `setLoadedResources` factory is therefore never
+// consulted for them, so they stay stock. Widening the seam to cover them needs
+// a patch change in fleek-pi-ui — out of scope for this extension module (see
+// the report). `renderResourceSection` already handles a diagnostics-shaped
+// name (hue falls back to primary), so no extension change is needed if that
+// seam is later widened.
 import type { ExtensionAPI, ExtensionContext, ExtensionUIContext } from "@earendil-works/pi-coding-agent"
 import type { Component } from "@earendil-works/pi-tui"
 import { M, PAL, type Pair, bold, card, fg, tinted, truncateAnsi, wrap } from "./ui-kit"

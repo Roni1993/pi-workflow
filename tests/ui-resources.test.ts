@@ -11,6 +11,11 @@ const SECTIONS: LoadedSection[] = [
   { name: "Skills", header: "[Skills]", collapsedBody: "ask-matt, bg, ponytail", expandedBody: "ask-matt\nbg\nponytail", color: "mdHeading", expanded: true },
   { name: "Extensions", header: "[Extensions]", collapsedBody: "", expandedBody: "ui", color: "mdHeading", expanded: false },
   { name: "Unknown", header: "[Unknown]", collapsedBody: "x".repeat(500), expandedBody: "", color: "mdHeading", expanded: true },
+  // Diagnostics section names. The loaded-resources seam never dispatches these
+  // (they bypass addLoadedSection — see resources.ts header), but the same
+  // renderer must stay width-safe if that seam is later widened.
+  { name: "Skill conflicts", header: "[Skill conflicts]", collapsedBody: "demo conflicts with demo2", expandedBody: `${long}`, color: "warning", expanded: false },
+  { name: "Extension issues", header: "[Extension issues]", collapsedBody: "boom.ts: failed to load", expandedBody: "", color: "warning", expanded: true },
 ]
 
 const WIDTHS = [20, 40, 80, 120]
