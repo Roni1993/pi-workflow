@@ -55,17 +55,18 @@ function apply(ctx: ExtensionContext | undefined): boolean {
 }
 
 export function registerTheme(pi: ExtensionAPI): void {
+  // Single source of truth: the theme file in pi's own store. We deliberately
+  // do NOT also return it via `resources_discover` (nor `pi.themes` in
+  // package.json) — registering the same theme name from two paths makes pi
+  // print a "[Theme conflicts] opencode collision" and skip one.
   installTheme()
 
-  pi.on("resources_discover", (_event: unknown, ctx: ExtensionContext) => {
-    const dir = themeDir()
-    if (!dir) return undefined
+  pi.on("session_start", (_event: unknown, ctx: ExtensionContext) => {
     // Poll until the registry exposes the theme, then select it (bounded ~6s).
     let tries = 0
     const timer = setInterval(() => {
       tries += 1
       if (apply(ctx) || tries > 40) clearInterval(timer)
     }, 150)
-    return { themePaths: [dir] }
   })
 }
