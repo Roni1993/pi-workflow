@@ -8,6 +8,7 @@ import type {
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent"
 import { Text } from "@earendil-works/pi-tui"
+import { currentOwner } from "./ui/live"
 
 const BG_DIR = path.join(os.homedir(), ".pi", "agent", "bg")
 const INDEX = path.join(BG_DIR, "index.json")
@@ -25,6 +26,8 @@ interface BgAgent {
   createdAt: string
   status: "spawning" | "running" | "settled" | "stopped"
   lastEventLine: number
+  /** Controller pi session that spawned this agent (see ui/live currentOwner). */
+  owner?: string
 }
 
 function slugify(s: string): string {
@@ -203,6 +206,7 @@ async function spawnAgent(ctx: ExtensionCommandContext, args: string): Promise<s
     createdAt: new Date().toISOString(),
     status: "spawning",
     lastEventLine: 0,
+    owner: currentOwner(ctx),
   }
   const index = await readIndex()
   index[id] = agent

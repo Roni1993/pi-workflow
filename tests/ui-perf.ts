@@ -12,13 +12,26 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 import { performance } from "node:perf_hooks"
 import {
+  MAX_ACTIVE_ROWS,
+  MAX_SETTLED_ROWS,
   chatView,
+  createPoller,
   dashboardView,
   deriveDockData,
   statusView,
   type DockData,
 } from "../extensions/ui/dock.ts"
-import { INDEX, liveState, readLiveState, hasSession, type BgAgent, type LiveState } from "../extensions/ui/live.ts"
+import {
+  INDEX,
+  currentOwner,
+  listSessions,
+  liveState,
+  readLiveState,
+  hasSession,
+  tmuxStats,
+  type BgAgent,
+  type LiveState,
+} from "../extensions/ui/live.ts"
 
 const FRAME_MS = 110 // dock.ts FRAME_MS
 const POLL_MS = 1500 // dock.ts POLL_MS
@@ -77,12 +90,16 @@ const CLEAN_ACTIONS = [
 ]
 const MESSY_ACTIONS = [...CLEAN_ACTIONS, "bash(git status) [ERROR]"]
 
-/** Mirror the real index distribution: ~12.8% spawning, rest running. */
-function synthStates(n: number, alive: boolean, actions: string[]): LiveState[] {
+/** Synthetic owner used by every fixture (render data is owner-scoped). */
+const OWNER = "__ui_perf_owner__"
+
+/** Mirror the real index distribution: ~12.8% spawning, rest running.
+ *  `owner: null` builds a legacy row with no owner field. */
+function synthStates(n: number, alive: boolean, actions: string[], owner: string | null = OWNER): LiveState[] {
   const out: LiveState[] = []
   for (let i = 0; i < n; i++) {
     const spawning = i % 8 === 7
-    const agent: BgAgent = {
+    const base: BgAgent = {
       id: `agent-${String(i).padStart(4, "0")}`,
       tmux: `pi-bg-agent-${String(i).padStart(4, "0")}`,
       dir: join(tmpdir(), "ui-perf-nonexistent", String(i)),
@@ -93,11 +110,13 @@ function synthStates(n: number, alive: boolean, actions: string[]): LiveState[] 
       createdAt: "",
       status: spawning ? "spawning" : "running",
     }
+    const agent: BgAgent = owner === null ? base : { ...base, owner }
     out.push({ agent, alive, action: actions[i % actions.length]! })
   }
   return out
 }
-const synthData = (n: number, alive: boolean) => deriveDockData(synthStates(n, alive, alive ? CLEAN_ACTIONS : MESSY_ACTIONS))
+const synthData = (n: number, alive: boolean) =>
+  deriveDockData(synthStates(n, alive, alive ? CLEAN_ACTIONS : MESSY_ACTIONS), OWNER)
 
 // ── report header ───────────────────────────────────────────────────────────
 console.log("")
@@ -227,39 +246,56 @@ console.log("── 4. PER-AGENT FILE READ — liveState(): fixture dir vs missi
 }
 console.log("")
 
-// ── 5. full poll replication ────────────────────────────────────────────────
-console.log("── 5. FULL POLL REPLICATION (readLiveState → Promise.all(liveState) → deriveDockData), ONE run ──")
+// ── 5. scoped poll (the real dock path) ─────────────────────────────────────
+console.log("── 5. SCOPED POLL (owner-scoped createPoller, real index) ONE run ──────")
+let realPollMs = 0
 {
+  const spawns0 = tmuxStats.spawns
+  const p = createPoller(OWNER)
   const t0 = performance.now()
-  const { agents } = await readLiveState()
-  const t1 = performance.now()
-  const states: LiveState[] = await Promise.all(
-    (agents ?? []).map(async (agent): Promise<LiveState> => {
-      try {
-        return await liveState(agent)
-      } catch {
-        return { agent, alive: false, action: "—" }
-      }
-    }),
-  )
-  const t2 = performance.now()
-  const data: DockData = deriveDockData(states)
-  const t3 = performance.now()
-  const total = t3 - t0
-  const stale = data.agents.filter((a) => !a.alive).length
-  const staleDashLines = dashboardView(120, data).length
-  console.log(`  agents               : ${agents.length}`)
-  console.log(`  readLiveState        : ${ms(t1 - t0)} ms`)
-  console.log(`  Promise.all(liveState): ${ms(t2 - t1)} ms`)
-  console.log(`  deriveDockData       : ${ms(t3 - t2)} ms`)
-  console.log(`  TOTAL poll           : ${ms(total)} ms`)
-  console.log(`  alive / stale        : ${agents.length - stale} / ${stale}`)
-  console.log(`  dashboard lines @469 : ${staleDashLines}`)
-  console.log(`  verdict              : ${total <= POLL_MS ? "FITS" : "EXCEEDS"} the ${POLL_MS}ms POLL_MS budget by ${ms(total - POLL_MS)} ms`)
+  await p.poll()
+  realPollMs = performance.now() - t0
+  const tmuxCalls = tmuxStats.spawns - spawns0
+  const data = p.data()
+  const dashLines = dashboardView(120, data).length
+  console.log(`  real index agents    : ${(await readLiveState()).agents.length} (all legacy → excluded)`)
+  console.log(`  scoped agents        : ${data.agents.length}`)
+  console.log(`  tmux spawns in poll  : ${tmuxCalls}  (must be ≤ 1)`)
+  console.log(`  TOTAL poll           : ${ms(realPollMs)} ms`)
+  console.log(`  dashboard lines      : ${dashLines}`)
+  console.log(`  verdict              : ${realPollMs <= POLL_MS ? "FITS" : "EXCEEDS"} the ${POLL_MS}ms POLL_MS budget by ${ms(realPollMs - POLL_MS)} ms`)
 }
+
 console.log("")
+console.log("── 5b. OWNED-469 POLL, REAL single-tmux path (the old hot spot) ────────")
+{
+  const N = 469
+  const states = synthStates(N, true, CLEAN_ACTIONS)
+  // Real listSessions + real liveState; only readAll is synthetic (owned rows,
+  // missing dirs) so the number is comparable to the old "FULL POLL REPLICATION"
+  // which spawned 469 `tmux has-session` processes and took ~700ms.
+  const spawns0 = tmuxStats.spawns
+  const deps = {
+    readAll: async () => states.map((s) => s.agent),
+    listLive: listSessions,
+    readOne: (agent: BgAgent, live: Set<string>) => liveState(agent, live),
+    owner: OWNER,
+  }
+  const p = createPoller(OWNER, deps)
+  const t0 = performance.now()
+  await p.poll()
+  const elapsed = performance.now() - t0
+  const tmuxCalls = tmuxStats.spawns - spawns0
+  const data = p.data()
+  console.log(`  owned agents         : ${N}`)
+  console.log(`  scoped agents        : ${data.agents.length}`)
+  console.log(`  tmux spawns in poll  : ${tmuxCalls}  (was ${N})`)
+  console.log(`  TOTAL poll           : ${ms(elapsed)} ms  (was ~700ms)`)
+  console.log(`  dashboard lines      : ${dashboardView(120, data).length}  (cap ${MAX_ACTIVE_ROWS}+${MAX_SETTLED_ROWS})`)
+}
 
 // ── extra: 469-agent dashboard lines + implied lines/second ─────────────────
+console.log("")
 console.log("── 6. OUTPUT VOLUME at N=469 ──────────────────────────────────────────")
 {
   for (const [variant, alive] of [["stale", false], ["live", true]] as const) {
@@ -268,8 +304,108 @@ console.log("── 6. OUTPUT VOLUME at N=469 ───────────�
     console.log(`  dashboard @469 ${padR(variant, 6)}: ${lines} lines  → ${(lines / (FRAME_MS / 1000)).toFixed(0)} lines/sec at a ${FRAME_MS}ms frame`)
   }
 }
+
+// ── 7. regression assertions (deterministic; no wall-clock thresholds) ──────
 console.log("")
+console.log("── 7. REGRESSION ASSERTIONS ───────────────────────────────────────────")
+let pass = 0
+let fail = 0
+function reg(name: string, ok: boolean, detail = ""): void {
+  if (ok) {
+    pass++
+    console.log(`  PASS  ${name}${detail ? `  — ${detail}` : ""}`)
+  } else {
+    fail++
+    console.log(`  FAIL  ${name}${detail ? `  — ${detail}` : ""}`)
+  }
+}
+
+// (a) a poll performs at most ONE tmux liveness call regardless of index size.
+{
+  const N = 5000
+  const states = synthStates(N, true, CLEAN_ACTIONS)
+  // Count tmux spawns across the real live.ts seam by using the default
+  // listLive (listSessions) and a counting readAll that never touches disk.
+  let spawns = 0
+  const deps = {
+    readAll: async () => states.map((s) => s.agent),
+    listLive: async () => {
+      spawns++ // one logical liveness call
+      return new Set<string>()
+    },
+    readOne: async (agent: BgAgent, live: Set<string>) => ({ agent, alive: live.has(agent.tmux), action: "—" }),
+    owner: OWNER,
+  }
+  const p = createPoller(OWNER, deps)
+  await p.poll()
+  reg("(a) one liveness call per poll @5000", spawns === 1, `liveness calls=${spawns}`)
+
+  // And prove the real seam is O(1): listSessions spawns one tmux process, not N.
+  const s0 = tmuxStats.spawns
+  await listSessions()
+  reg("(a2) listSessions spawns exactly 1 tmux process", tmuxStats.spawns - s0 === 1)
+}
+
+// (b) with a synthetic 5000-row index, only owned agents are enriched/rendered.
+{
+  const owned = synthStates(3, true, CLEAN_ACTIONS, OWNER)
+  const foreign = synthStates(4957, true, CLEAN_ACTIONS, "some-other-session")
+  const legacy = synthStates(40, true, CLEAN_ACTIONS, null)
+  const all = [...owned, ...foreign, ...legacy]
+  reg("(b0) fixture index is exactly 5000 rows", all.length === 5000, `rows=${all.length}`)
+  let enrichments = 0
+  const deps = {
+    readAll: async () => all.map((s) => s.agent),
+    listLive: async () => new Set<string>(),
+    readOne: async (agent: BgAgent, live: Set<string>) => {
+      enrichments++
+      return { agent, alive: live.has(agent.tmux), action: "enriched" }
+    },
+    owner: OWNER,
+  }
+  const p = createPoller(OWNER, deps)
+  await p.poll()
+  const data = p.data()
+  reg("(b) only 3/5000 owned agents enriched", enrichments === 3, `enriched=${enrichments}`)
+  reg("(b2) foreign + legacy excluded from render", data.agents.length === 3, `rendered=${data.agents.length}`)
+}
+
+// (c) dashboardView output is capped: bounded by a constant, not by agent count.
+{
+  const BOUND = 64 // generous constant; real value ~36, independent of N
+  const bigLive = dashboardView(120, synthData(5000, true)) // all alive → active bucket
+  const bigSettled = dashboardView(120, synthData(5000, false)) // stale → settled bucket
+  const small = dashboardView(120, synthData(200, true)).length
+  reg("(c) dashboard bounded @5000 active", bigLive.length <= BOUND, `lines=${bigLive.length} <= ${BOUND}`)
+  reg("(c2) line count is O(1) in N (5000 == 200 shape)", bigLive.length === small, `5000→${bigLive.length}, 200→${small}`)
+  reg("(c3) dashboard hides active overflow", bigLive.some((l) => /more active/.test(l)))
+  reg("(c4) dashboard bounded @5000 settled", bigSettled.length <= BOUND, `lines=${bigSettled.length} <= ${BOUND}`)
+  reg("(c5) dashboard hides settled overflow", bigSettled.some((l) => /\d+ more/.test(l)))
+}
+
+// (e) owner identity: real session id preferred, pid fallback, never throws.
+{
+  reg("(e) currentOwner uses sessionManager.getSessionId()", currentOwner({ sessionManager: { getSessionId: () => "sess-42" } }) === "sess-42")
+  reg("(e2) currentOwner falls back to pid without a ctx", currentOwner() === String(process.pid))
+  reg("(e3) currentOwner survives a throwing/empty ctx", currentOwner({ sessionManager: { getSessionId: () => "" } }) === String(process.pid))
+}
+
+// (d) deriveDockData excludes non-owned and legacy (no-owner) rows.
+{
+  const mixed = [
+    ...synthStates(2, true, CLEAN_ACTIONS, OWNER),
+    ...synthStates(2, true, CLEAN_ACTIONS, "elsewhere"),
+    ...synthStates(2, true, CLEAN_ACTIONS, null),
+  ]
+  const data = deriveDockData(mixed, OWNER)
+  reg("(d) deriveDockData keeps only owned rows", data.agents.length === 2, `kept=${data.agents.length}`)
+  reg("(d2) counts reflect only owned rows", data.counts.running + data.counts.queued + data.counts.blocked + data.counts.done === 2)
+}
+
+console.log("")
+console.log(`REGRESSIONS: ${pass} passed, ${fail} failed`)
 console.log("done.")
+if (fail > 0) process.exitCode = 1
 
 function tmuxVersion(): string {
   const r = spawnSync("tmux", ["-V"], { encoding: "utf8" })

@@ -25,6 +25,30 @@ export interface BgAgent {
   prompt: string
   createdAt: string
   status: BgStatus
+  /** Controller pi session that spawned this agent. Legacy rows have none and
+   *  are excluded from a scoped poll. See currentOwner(). */
+  owner?: string
+}
+
+/** Testing seam: counts tmux processes spawned by this module. A scoped dock
+ *  poll must add exactly ONE (the global list-sessions call). */
+export const tmuxStats = { spawns: 0 }
+
+/**
+ * Identity of the controller pi session. Prefer the real session id exposed on
+ * the extension context (`ctx.sessionManager.getSessionId()`): it is cheap and
+ * synchronous, and two pi sessions in different terminals never collide. Fall
+ * back to the process id when the context is absent (headless/older hosts);
+ * that is still correct for the dock because spawn and poll share one process.
+ */
+export function currentOwner(ctx?: { sessionManager?: { getSessionId?: () => string } }): string {
+  try {
+    const id = ctx?.sessionManager?.getSessionId?.()
+    if (typeof id === "string" && id) return id
+  } catch {
+    // fall through to pid
+  }
+  return String(process.pid)
 }
 
 /** Coerce a raw index entry into a fully-populated BgAgent. Never throws. */
@@ -40,6 +64,7 @@ function normalize(id: string, raw: unknown): BgAgent {
     prompt: typeof a.prompt === "string" ? a.prompt : "",
     createdAt: typeof a.createdAt === "string" ? a.createdAt : "",
     status: typeof a.status === "string" ? a.status : "unknown",
+    owner: typeof a.owner === "string" && a.owner ? a.owner : undefined,
   }
 }
 
@@ -61,15 +86,39 @@ export async function listAgents(): Promise<BgAgent[]> {
   return Object.values(idx).sort((a, b) => b.createdAt.localeCompare(a.createdAt))
 }
 
-/** Liveness via tmux. Any failure (no tmux, no server, no session) = false. */
-export function hasSession(tmuxName: string): Promise<boolean> {
+/**
+ * One tmux spawn returns every live session name. The dock must not spawn one
+ * `tmux has-session` per agent — N agents made the poll O(N) process spawns.
+ * Any failure (no tmux, no server) = the empty set, i.e. nothing alive.
+ */
+export function listSessions(): Promise<Set<string>> {
   return new Promise((resolve) => {
     try {
-      execFile("tmux", ["has-session", "-t", tmuxName], { timeout: 5_000 }, (err) => resolve(!err))
+      tmuxStats.spawns++
+      execFile("tmux", ["list-sessions", "-F", "#{session_name}"], { timeout: 5_000 }, (err, stdout) => {
+        if (err) {
+          resolve(new Set())
+          return
+        }
+        const names = String(stdout)
+          .split("\n")
+          .map((s) => s.trim())
+          .filter(Boolean)
+        resolve(new Set(names))
+      })
     } catch {
-      resolve(false)
+      resolve(new Set())
     }
   })
+}
+
+/**
+ * Liveness for ONE session. Kept for other callers; spawns one tmux process.
+ * Prefer listSessions() + set membership in the poll path.
+ */
+export async function hasSession(tmuxName: string): Promise<boolean> {
+  const live = await listSessions()
+  return live.has(tmuxName)
 }
 
 /** Tail the agent log (bounded), tolerating a missing or unreadable file. */
@@ -126,8 +175,10 @@ export interface LiveState {
   action: string
 }
 
-/** Latest meaningful action for one agent, reduced from the out.jsonl tail. */
-export async function liveState(agent: BgAgent): Promise<LiveState> {
+/** Latest meaningful action for one agent, reduced from the out.jsonl tail.
+ *  Pass a precomputed `live` set from listSessions() so the poll spawns tmux
+ *  once for N agents instead of once per agent. */
+export async function liveState(agent: BgAgent, live?: Set<string>): Promise<LiveState> {
   const lines = await readLines(join(agent.dir, "out.jsonl"))
   let action = ""
   let error = ""
@@ -153,7 +204,8 @@ export async function liveState(agent: BgAgent): Promise<LiveState> {
   }
   if (lastTool) action = lastTool + (lastToolError ? " [ERROR]" : "")
   else if (error) action = error
-  return { agent, alive: await hasSession(agent.tmux), action: action || "—" }
+  const alive = live ? live.has(agent.tmux) : await hasSession(agent.tmux)
+  return { agent, alive, action: action || "—" }
 }
 
 /** Poll entry point. Never throws. */

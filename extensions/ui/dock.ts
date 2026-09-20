@@ -21,11 +21,22 @@ import {
   truncateAnsi,
   visibleWidth,
 } from "./ui-kit"
-import { liveState, readLiveState, shortModel, type BgAgent, type LiveState } from "./live"
+import {
+  currentOwner,
+  listSessions,
+  liveState,
+  readLiveState,
+  shortModel,
+  type BgAgent,
+  type LiveState,
+} from "./live"
 
 const FRAME_MS = 110
 const POLL_MS = 1500
 const PROMPT = "ask anything…"
+/** Render caps: never draw every agent, however many the index holds. */
+export const MAX_ACTIVE_ROWS = 8
+export const MAX_SETTLED_ROWS = 5
 
 export interface DockAgent {
   id: string
@@ -99,19 +110,25 @@ function countsOf(agents: DockAgent[]): DockCounts {
   return counts
 }
 
-/** Derive the render snapshot from live polls. Never throws. */
-export function deriveDockData(states: LiveState[]): DockData {
+/** Derive the render snapshot from live polls. Never throws.
+ *  When `owner` is given, non-owned rows and legacy rows with no owner are
+ *  dropped, so the global ~/.pi/agent/bg/index.json never bleeds into a
+ *  scoped UI. The poll always passes the owner; omitting it is a headless
+ *  render-test convenience only. */
+export function deriveDockData(states: LiveState[], owner?: string): DockData {
   const list = Array.isArray(states) ? states : []
-  const agents: DockAgent[] = list.map((s) => {
+  const agents: DockAgent[] = []
+  for (const s of list) {
     const agent = (s?.agent ?? {}) as Partial<BgAgent>
-    return {
+    if (owner !== undefined && agent.owner !== owner) continue
+    agents.push({
       id: typeof agent.id === "string" && agent.id ? agent.id : "?",
       model: shortModel(typeof agent.model === "string" ? agent.model : undefined),
       action: typeof s?.action === "string" && s.action ? s.action : "—",
       alive: !!s?.alive,
       status: typeof agent.status === "string" && agent.status ? agent.status : "unknown",
-    }
-  })
+    })
+  }
   return { agents, counts: countsOf(agents) }
 }
 
@@ -192,9 +209,10 @@ const agentLine1 = (a: DockAgent) =>
   icon(a) + " " + fg(PAL.text, bold(a.id)) + fg(PAL.dim, `   ${a.status}   `) + badge(a) + fg(PAL.dim, a.alive ? "   alive" : "   dead")
 const agentLine2 = (a: DockAgent) => fg(PAL.dim, `${a.model}   ·   `) + fg(PAL.text, a.action)
 
-/** workflow card with nested agents — two-tone bg, deep shade from the inner ▏ rail. */
-function workflowCard(width: number, agents: DockAgent[]): string[] {
-  const c = countsOf(agents)
+/** workflow card with nested agents — two-tone bg, deep shade from the inner ▏ rail.
+ *  `counts` summarises ALL owned agents even when only `agents` (the cap) render. */
+function workflowCard(width: number, agents: DockAgent[], hidden = 0, counts = countsOf(agents)): string[] {
+  const c = counts
   const inner = lighten(PAL.state.running, 0.3)
   const deep = (content: string) => {
     const left = bgOpen(WF.bg) + fgOpen(WF.rail) + "▌ " + "  "
@@ -209,7 +227,7 @@ function workflowCard(width: number, agents: DockAgent[]): string[] {
       width,
       WF.bg,
       WF.rail,
-      fg(PAL.think.rail, "⟳ ") + fg(PAL.text, bold("workflow  ")) + fg(PAL.text, bold(`${agents.length} active`)),
+      fg(PAL.think.rail, "⟳ ") + fg(PAL.text, bold("workflow  ")) + fg(PAL.text, bold(`${c.running + c.queued} active`)),
     ),
   )
   lines.push(railLine(width, WF.bg, WF.rail, fg(PAL.dim, `  ${c.running} running · ${c.queued} queued · ${c.done} done · ${c.blocked} blocked`)))
@@ -220,21 +238,32 @@ function workflowCard(width: number, agents: DockAgent[]): string[] {
     lines.push(deep(agentLine2(a)))
     if (i < agents.length - 1) lines.push(deep(""))
   })
+  if (hidden > 0) lines.push(deep(fg(PAL.dim, `… ${hidden} more active`)))
   lines.push(railLine(width, WF.bg, WF.rail, ""))
   return lines
 }
 
-function standaloneCard(width: number, agents: DockAgent[]): string[] {
+function standaloneCard(width: number, agents: DockAgent[], hidden = 0): string[] {
   const body = [fg(PAL.dim, "standalone agents   ·   settled or detached"), ""]
   if (!agents.length) body.push(fg(PAL.dim, "   none"))
   for (const a of agents) {
     body.push(icon(a) + " " + fg(PAL.text, a.id) + fg(PAL.dim, `   ${a.status}   `) + badge(a))
     body.push(fg(PAL.dim, `   ${a.model}   ·   `) + fg(PAL.text, a.action))
   }
+  if (hidden > 0) body.push(fg(PAL.dim, `   … ${hidden} more`))
   return card(width, PAL.tools, body)
 }
 
-/** Dashboard: active agents nested in the workflow card + settled in their own box. */
+/** Cap a newest-first list, appending a "… M more" marker when truncated. */
+function cap<T>(items: T[], max: number): { shown: T[]; hidden: number } {
+  const n = Array.isArray(items) ? items.length : 0
+  if (n <= max) return { shown: items, hidden: 0 }
+  return { shown: items.slice(0, max), hidden: n - max }
+}
+
+/** Dashboard: active agents nested in the workflow card + settled in their own box.
+ *  At most MAX_ACTIVE_ROWS + MAX_SETTLED_ROWS agents are drawn; the rest collapse
+ *  to a count marker so the frame stays O(1) in index size. */
 export function dashboardView(width: number, data: DockData): string[] {
   const w = safeWidth(width)
   const d = normalize(data)
@@ -246,7 +275,14 @@ export function dashboardView(width: number, data: DockData): string[] {
     const s = agentState(a)
     return s === "done" || s === "blocked"
   })
-  const out = ["", ...workflowCard(w, active), "", ...standaloneCard(w, rest)]
+  const act = cap(active, MAX_ACTIVE_ROWS)
+  const done = cap(rest, MAX_SETTLED_ROWS)
+  const out = [
+    "",
+    ...workflowCard(w, act.shown, act.hidden, d.counts),
+    "",
+    ...standaloneCard(w, done.shown, done.hidden),
+  ]
   return out.map((l) => truncateAnsi(l, w))
 }
 
@@ -298,14 +334,33 @@ function safeRender(fn: () => string[], width: number): string[] {
 }
 
 // ── live binding ────────────────────────────────────────────────────────────
-interface Poller {
+export interface Poller {
   data(): DockData
   poll(): Promise<void>
   tick(): void
 }
 
-/** Poll readLiveState + per-agent liveState; coalesces overlap and never throws. */
-function createPoller(): Poller {
+interface PollerDeps {
+  readAll: () => Promise<BgAgent[]>
+  listLive: () => Promise<Set<string>>
+  readOne: (agent: BgAgent, live: Set<string>) => Promise<LiveState>
+  owner: string
+}
+
+const defaultDeps = (owner: string): PollerDeps => ({
+  readAll: async () => (await readLiveState()).agents,
+  listLive: listSessions,
+  readOne: async (agent, live) => liveState(agent, live),
+  owner,
+})
+
+/**
+ * Poll once per tick: read the index, scope to owned agents (legacy/no-owner
+ * rows are dropped before any I/O), then take ONE tmux snapshot and derive
+ * liveness by set membership. Non-owned rows are never enriched — no out.jsonl
+ * read, no tmux spawn. Coalesces overlap and never throws.
+ */
+export function createPoller(owner: string = currentOwner(), deps: PollerDeps = defaultDeps(owner)): Poller {
   let current = emptyData()
   let last = 0
   let busy = false
@@ -313,17 +368,20 @@ function createPoller(): Poller {
     if (busy) return
     busy = true
     try {
-      const { agents } = await readLiveState()
+      const all = await deps.readAll()
+      const owned = (all ?? []).filter((a) => a?.owner === deps.owner)
+      // No owned agents → no liveness needed; skip the tmux spawn entirely.
+      const live = owned.length > 0 ? await deps.listLive() : new Set<string>()
       const states = await Promise.all(
-        (agents ?? []).map(async (agent): Promise<LiveState> => {
+        owned.map(async (agent): Promise<LiveState> => {
           try {
-            return await liveState(agent)
+            return await deps.readOne(agent, live)
           } catch {
             return { agent, alive: false, action: "—" }
           }
         }),
       )
-      current = deriveDockData(states)
+      current = deriveDockData(states, deps.owner)
     } catch {
       current = emptyData()
     } finally {
@@ -355,19 +413,26 @@ function dockHeader(width: number, mode: "chat" | "dashboard"): string {
 }
 
 export function registerDock(pi: ExtensionAPI): void {
-  const poller = createPoller()
+  // Owner is resolved from the real session identity on first command use, so
+  // two pi terminals never share each other's agents. Created once per process.
+  let poller: Poller | undefined
+  const getPoller = (ctx: ExtensionCommandContext): Poller => {
+    if (!poller) poller = createPoller(currentOwner(ctx))
+    return poller
+  }
 
   pi.registerCommand("ui-dock", {
     description: "Preview the dock overlay — d chat/dashboard · q close",
     handler: async (_args: string, ctx: ExtensionCommandContext) => {
-      await poller.poll().catch(() => {})
+      const p = getPoller(ctx)
+      await p.poll().catch(() => {})
       await ctx.ui.custom<string>(
         (tui, _theme, _keybindings, done) => {
           let mode: "chat" | "dashboard" = "chat"
           let phase = 0
           const timer = setInterval(() => {
             phase += 0.32
-            poller.tick()
+            p.tick()
             try {
               tui.requestRender()
             } catch {
@@ -382,7 +447,7 @@ export function registerDock(pi: ExtensionAPI): void {
             render: (width: number) =>
               safeRender(() => {
                 const body =
-                  mode === "chat" ? chatView(width, phase, poller.data()) : dashboardView(width, poller.data())
+                  mode === "chat" ? chatView(width, phase, p.data()) : dashboardView(width, p.data())
                 return [dockHeader(width, mode), "", ...body]
               }, width),
             invalidate: () => {},
@@ -414,8 +479,9 @@ export function registerDock(pi: ExtensionAPI): void {
         ctx.ui.notify("ui-dock off", "info")
         return
       }
-      ctx.ui.setWidget("ui-dock", statusWidget(() => poller.data(), () => poller.tick()), { placement: "belowEditor" })
-      poller.tick()
+      const p = getPoller(ctx)
+      ctx.ui.setWidget("ui-dock", statusWidget(() => p.data(), () => p.tick()), { placement: "belowEditor" })
+      p.tick()
       ctx.ui.notify("ui-dock installed below the editor", "info")
     },
   })
