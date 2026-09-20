@@ -15,7 +15,7 @@ plain imports, not separately-loaded extensions).
 
 | Module | Ticket | What it does |
 |---|---|---|
-| `ui-kit.ts` | T1 | matugen palette, role tints, padded full-width cards, ANSI-aware `truncateAnsi`, local `visibleWidth` (code-point counted, PUA-safe). No pi-tui import, so it is headless-testable. |
+| `ui-kit.ts` | T1 | matugen palette, role tints, padded full-width cards, ANSI-aware `truncateAnsi`. Width is measured by pi-tui's own `visibleWidth`/`truncateToWidth` (re-exported), not a local model, so the guard agrees with what pi validates. Headless-testable via the esbuild alias to the real installed pi-tui. |
 | `live.ts` | T1 | read-only live-state contract (`index.json`, `out.jsonl` tail, tmux liveness), fully defensive. |
 | `dock.ts` | T2 | `/ui-dock` preview + `/dock on\|off` widget below the editor. Chat + dashboard, live-polled, animated thinking rail, timers cleared in `dispose()`. |
 | `questions.ts` | T3 | HITL modal: powerline stepper, preview, inverted focused row, circle-fill multi, note, real typed input via pi-tui `Editor`/`Input`, Submit recap. Exposes `askQuestions(ui, questions)`; **used by the pipeline grill** and `/ui-questions`. |
@@ -35,8 +35,9 @@ bash tests/ui-transcript.sh   # transcript cards    — 2414 checks
 ```
 
 Every suite renders at widths 20/40/80/120 and asserts no throw and no line wider
-than the terminal (the fatal-crash contract). Bundling uses
-`--alias:@earendil-works/pi-tui=./tests/pi-tui-stub.mjs`.
+than the terminal (the fatal-crash contract). Bundling aliases
+`@earendil-works/pi-tui` to the **real installed pi-tui**, resolved at runtime by
+`tests/lib-pi-tui.sh` from `$(command -v pi)`.
 
 Bundle checks as pi loads them (clean = no output):
 

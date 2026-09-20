@@ -1,13 +1,15 @@
 // Shared prototype UI kit — matugen palette, colour helpers, card primitives.
-// Port of pi-opencode-ui/lib/ui-kit.ts. The one change: visibleWidth is local
-// (ANSI-stripped display width) so this module is headlessly testable and
-// dependency-free. Display width is what the terminal actually advances, so a
-// CJK/emoji line is counted as 2 cells per glyph and the width guard cannot be
-// fooled by code-point counting. Powerline PUA glyphs (U+E0B0/U+E0B2) stay at
-// width 1 — the deliberate compensation the locked design needs.
+// Port of pi-opencode-ui/lib/ui-kit.ts. Width measurement is NOT re-derived
+// here: we use pi-tui's own `visibleWidth` / `truncateToWidth` so a line this
+// module calls safe is safe by the exact engine pi validates with (a local
+// model counted ✅ U+2705 as 1 while pi counted 2, and pi exited with
+// "Rendered line N exceeds terminal width").
 import { readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
+import { visibleWidth, truncateToWidth } from "@earendil-works/pi-tui"
+
+export { visibleWidth }
 
 export const FALLBACK = {
   primary: "#73d5e2",
@@ -24,59 +26,6 @@ export const FALLBACK = {
   cyan: "#629ba7",
 }
 export type Role = keyof typeof FALLBACK
-
-/** Zero-width code points: combining marks, zero-width joiners/spaces, VS15/16. */
-function isZeroWidth(cp: number): boolean {
-  return (
-    (cp >= 0x0300 && cp <= 0x036f) || // combining diacritical marks
-    (cp >= 0x1ab0 && cp <= 0x1aff) || // combining diacritical marks extended
-    (cp >= 0x1dc0 && cp <= 0x1dff) || // combining diacritical marks supplement
-    (cp >= 0x20d0 && cp <= 0x20ff) || // combining marks for symbols
-    (cp >= 0xfe00 && cp <= 0xfe0f) || // variation selectors
-    (cp >= 0xfe20 && cp <= 0xfe2f) || // combining half marks
-    cp === 0x200b || // zero width space
-    cp === 0x200c || // zero width non-joiner
-    cp === 0x200d || // zero width joiner
-    cp === 0xfeff // zero width no-break space
-  )
-}
-
-/**
- * East Asian Wide/Fullwidth + emoji-presentation ranges (2 cells).
- * Powerline PUA (U+E0B0/U+E0B2) deliberately NOT here: they stay 1 cell.
- */
-function isWide(cp: number): boolean {
-  return (
-    (cp >= 0x1100 && cp <= 0x115f) || // Hangul Jamo
-    (cp >= 0x2e80 && cp <= 0x303e) || // CJK radicals/Kangxi
-    (cp >= 0x3041 && cp <= 0x33ff) || // Hiragana..CJK compat
-    (cp >= 0x3400 && cp <= 0x4dbf) || // CJK ext A
-    (cp >= 0x4e00 && cp <= 0x9fff) || // CJK unified
-    (cp >= 0xa000 && cp <= 0xa4cf) || // Yi
-    (cp >= 0xac00 && cp <= 0xd7a3) || // Hangul syllables
-    (cp >= 0xf900 && cp <= 0xfaff) || // CJK compat ideographs
-    (cp >= 0xfe30 && cp <= 0xfe4f) || // CJK compat forms
-    (cp >= 0xff00 && cp <= 0xff60) || // fullwidth forms
-    (cp >= 0xffe0 && cp <= 0xffe6) || // fullwidth signs
-    (cp >= 0x1f300 && cp <= 0x1faff) || // emoji & pictographs (+ supplemental)
-    (cp >= 0x1f900 && cp <= 0x1f9ff) || // supplemental symbols & pictographs
-    (cp >= 0x20000 && cp <= 0x3fffd) // CJK ext B..F
-  )
-}
-
-/** Display width of ONE code point, in terminal cells. */
-export function charWidth(cp: number): number {
-  if (isZeroWidth(cp)) return 0
-  if (isWide(cp)) return 2
-  return 1
-}
-
-/** Visible cell width: strip ANSI SGR sequences, then sum per-code-point widths. */
-export function visibleWidth(s: string): number {
-  let total = 0
-  for (const ch of s.replace(/\x1b\[[0-9;]*m/g, "")) total += charWidth(ch.codePointAt(0)!)
-  return total
-}
 
 export function loadMatugen(): Record<Role, string> {
   const out = { ...FALLBACK } as Record<Role, string>
@@ -190,54 +139,19 @@ export function card(width: number, pair: Pair, content: string[], buffer = 1): 
 }
 
 /**
- * ANSI-aware truncate to `width` visible columns, counted by display width (CJK
- * and emoji are 2 cells, combining marks 0; Powerline PUA stays 1). A wide glyph
- * is never split and a line never ends on half of one. Always ends in RESET.
- * This is the width-safety guard: every rendered line must pass through it or
- * pi exits with "Rendered line N exceeds terminal width".
+ * ANSI-aware truncate to `width` visible columns, measured by pi-tui's own
+ * `truncateToWidth` (the exact function pi validates rendered lines with, so a
+ * line this returns can never trip "Rendered line N exceeds terminal width").
+ * Thin wrapper over the real engine so all call sites keep this signature; it
+ * always ends in RESET so a background opened earlier cannot bleed past the cut.
  */
 export function truncateAnsi(line: string, width: number): string {
   if (width <= 0) return ""
-  const re = /\x1b\[([0-9;]*)m/g
-  let fg: string | null = null
-  let bg: string | null = null
-  let boldOn = false
-  let col = 0
-  let out = ""
-  let last = 0
-  let m: RegExpExecArray | null
-  const style = () => (fg ?? "") + (bg ?? "") + (boldOn ? "\x1b[1m" : "")
-  let stopped = false
-  const push = (text: string) => {
-    if (!text || stopped || col >= width) return
-    let take = ""
-    for (const ch of text) {
-      const w = charWidth(ch.codePointAt(0)!)
-      if (col + w > width) {
-        stopped = true // never emit a glyph that would overflow, nor skip past it
-        break
-      }
-      take += ch
-      col += w
-    }
-    if (take) out += style() + take
-  }
-  while ((m = re.exec(line))) {
-    push(line.slice(last, m.index))
-    last = re.lastIndex
-    const codes = m[1]!.split(";").map(Number)
-    for (let i = 0; i < codes.length; i++) {
-      const c = codes[i]!
-      if (c === 0) { fg = null; bg = null; boldOn = false }
-      else if (c === 1) boldOn = true
-      else if (c === 22) boldOn = false
-      else if (c === 39) fg = null
-      else if (c === 49) bg = null
-      else if (c === 38 && codes[i + 1] === 2) { fg = `\x1b[38;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
-      else if (c === 48 && codes[i + 1] === 2) { bg = `\x1b[48;2;${codes[i + 2]};${codes[i + 3]};${codes[i + 4]}m`; i += 4 }
-    }
-    if (stopped || col >= width) break
-  }
-  if (!stopped && col < width) push(line.slice(last))
-  return out + "\x1b[0m"
+  const s = String(line)
+  const cut = truncateToWidth(s, width, "", false)
+  if (!cut) return RESET
+  // truncateToWidth preserves active SGR state and emits its own close code on
+  // a cut; a final reset makes the boundary unconditional.
+  return cut.endsWith(RESET) ? cut : cut + RESET
 }
+

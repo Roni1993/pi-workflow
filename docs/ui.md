@@ -178,15 +178,20 @@ PERF_PROFILE=1 bash tests/ui-perf.sh   # read-only perf + --cpu-prof summary
 pi -ne -e ./extensions/ui/index.ts --help   # exit 0, no extension errors
 ```
 
-Every render suite bundles with `--alias:@earendil-works/pi-tui=./tests/pi-tui-stub.mjs`
-and asserts, at widths 20/40/80/120, that nothing throws and no line is wider
-than the terminal.
+Every render suite bundles with the **real installed
+`@earendil-works/pi-tui`** (`tests/lib-pi-tui.sh` resolves it dynamically from
+`$(command -v pi)`; `PI_BIN` overrides) and asserts, at widths 20/40/80/120, that
+nothing throws and no line is wider than the terminal. Measuring with pi's own
+engine is deliberate: a hand-rolled counter once said ✅ was 1 cell while pi said
+2, and pi exited with `Rendered line 48 exceeds terminal width (378 > 377)`.
+`tests/ui-widechars.sh` carries that exact string as a regression.
 
 ## Perf / scope caveats
 
 - **Width safety is the hard contract.** Every rendered line is truncated with
-  code-point counting so PUA powerline chevrons stay 1 cell. A line-wider-than-
-  terminal is a fatal TUI crash, hence the width suites.
+  pi-tui's own `truncateToWidth`, so the guard measures exactly what pi measures
+  (CJK/emoji/VS16 are 2 cells, combining marks 0; PUA powerline chevrons stay 1).
+  A line-wider-than-terminal is a fatal TUI crash, hence the width suites.
 - **T4 tools grouping.** Real pi renders one component per tool call; the
   prototype's single box wrapping all calls is not reachable. The "latest 3
   open" rule is best-effort via a module-level recent-call list. See
