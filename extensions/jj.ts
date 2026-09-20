@@ -3,7 +3,6 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
 } from "@earendil-works/pi-coding-agent"
-import { Text } from "@earendil-works/pi-tui"
 
 function runJj(args: string[]): Promise<{ stdout: string; stderr: string }> {
   return new Promise((resolve, reject) => {
@@ -23,9 +22,8 @@ const USAGE = `usage: /jj status | log | new [msg] | describe <msg> | diff | pus
   push     push to remote (always confirms first)` 
 
 export default function jjExtension(pi: ExtensionAPI) {
-  pi.registerMessageRenderer("jj-output", (message, _o, theme) => {
-    return new Text(theme.fg("dim", String(message.content)), 0, 0)
-  })
+  // Renderer for "jj-output" is owned by extensions/ui/cards.ts (single owner
+  // to avoid a load-order-dependent collision). sendMessage still uses the type.
   const emit = (text: string) => {
     pi.sendMessage({ customType: "jj-output", content: text, display: true })
   }

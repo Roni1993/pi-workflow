@@ -2,7 +2,6 @@ import * as fs from "node:fs/promises"
 import * as path from "node:path"
 import * as os from "node:os"
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import { Text } from "@earendil-works/pi-tui"
 import { Type } from "@earendil-works/pi-ai"
 import { defineTool } from "@earendil-works/pi-coding-agent"
 
@@ -84,9 +83,8 @@ async function ensurePlan(goal: string): Promise<string> {
 }
 
 export default function goalExtension(pi: ExtensionAPI) {
-  pi.registerMessageRenderer("goal-output", (message, _o, theme) => {
-    return new Text(theme.fg("dim", String(message.content)), 0, 0)
-  })
+  // Renderer for "goal-output" is owned by extensions/ui/cards.ts (single owner
+  // to avoid a load-order-dependent collision). sendMessage still uses the type.
   const emit = (text: string) => {
     pi.sendMessage({ customType: "goal-output", content: text, display: true })
   }
