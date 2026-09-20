@@ -74,10 +74,13 @@ e2e_wait_ready() { # name — ready once the banner or the model status bar is d
   while ((SECONDS < t)); do
     local cap; cap=$(e2e_capture "$name")
     # The custom chrome replaces the stock banner and can scroll off above a
-    # long loaded-resources block, so also accept the always-visible footer
-    # model line (with or without the stock "• high" effort suffix).
+    # long loaded-resources block, so also accept the footer model line. That
+    # fallback MUST also require a TUI-only glyph: the model string is echoed in
+    # the shell when the launch command is typed, so matching it alone returns
+    # "ready" before pi is up and every keystroke is then lost.
     if grep -qF "escape interrupt" <<<"$cap" \
-      || { [ -n "$model_short" ] && grep -qF "$model_short" <<<"$cap"; }; then
+      || { [ -n "$model_short" ] && grep -qF "$model_short" <<<"$cap" \
+           && grep -qF "▌" <<<"$cap"; }; then
       return 0
     fi
     sleep 0.25

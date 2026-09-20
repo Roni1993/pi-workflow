@@ -191,7 +191,10 @@ scenario_backdrop() {
   fi
   e2e_capture_ansi "$s" > "$TMP/dim.ansi"
   e2e_save_ansi "$s" "backdrop-dimmed"
-  if node "$E2E_DIR/ansi-backdrop.mjs" "$TMP/base.ansi" "$TMP/dim.ansi" "[Context]" "$flag"; then
+  # Witness must be a base row NOT covered by the centered overlay. The custom
+  # footer (bottom row) carries the cwd and is always outside the overlay; the
+  # old "[Context]" marker no longer exists (the section now renders "▸ Context").
+  if node "$E2E_DIR/ansi-backdrop.mjs" "$TMP/base.ansi" "$TMP/dim.ansi" "$WORKDIR" "$flag"; then
     e2e_ok "background ANSI dimmed (backdrop=$flag)"
   else
     e2e_bad "background ANSI dimmed (backdrop=$flag)"
