@@ -10,7 +10,6 @@ import { registerTranscript } from "./transcript"
 import { registerTheme } from "./theme"
 import { registerChrome } from "./chrome"
 import { registerResources } from "./resources"
-import { registerEditor } from "./editor"
 import { registerSelectors } from "./selectors"
 import { PAL, card, fg, bold, truncateAnsi } from "./ui-kit"
 
@@ -58,7 +57,9 @@ export default function (pi: ExtensionAPI) {
   registerTheme(pi)
   registerChrome(pi)
   registerResources(pi)
-  registerEditor(pi)
+  // NOTE: registerEditor is intentionally NOT wired — a custom EditorComponent
+  // that re-frames the stock editor breaks its box/cursor. Revisit only with a
+  // from-scratch cursor-aware editor, or the opentui-RPC path.
   registerSelectors(pi)
   registerUiKit(pi)
 }
