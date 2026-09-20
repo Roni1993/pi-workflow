@@ -16,8 +16,8 @@
 //   - Width safety is non-negotiable: every line goes through truncateAnsi or
 //     pi exits with "Rendered line exceeds terminal width".
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent"
-import type { Component } from "@earendil-works/pi-tui"
-import { PAL, card, fg, truncateAnsi, wrap } from "./ui-kit"
+import { Markdown, type Component, type MarkdownTheme } from "@earendil-works/pi-tui"
+import { M, PAL, bold, card, fg, truncateAnsi, wrap } from "./ui-kit"
 
 /** Parsed view of a turn: plain text + the text of every thinking block. */
 export interface TranscriptParts {
@@ -76,6 +76,80 @@ function bodyLines(text: string, inner: number): string[] {
 }
 
 /**
+ * Markdown theme for the card body. pi's stock `getMarkdownTheme()` pulls the
+ * interactive theme's own colours; inside this card we style with the matugen
+ * palette instead. Every function uses `fg()` (or a reset-pair SGR), which
+ * resets *foreground only* (`\x1b[39m`) — never a full `\x1b[0m` reset — so the
+ * tinted card background opened later by `cardLine` survives every inline
+ * reset. `bold()` is ui-kit's `\x1b[1m…\x1b[22m` pair.
+ */
+const MARKDOWN_THEME: MarkdownTheme = {
+  heading: (t) => bold(fg(PAL.text, t)),
+  link: (t) => fg(M.primary, t),
+  linkUrl: (t) => fg(PAL.dim, t),
+  code: (t) => fg(M.tertiary, t),
+  codeBlock: (t) => fg(PAL.text, t),
+  codeBlockBorder: (t) => fg(PAL.ctx, t),
+  quote: (t) => fg(PAL.dim, t),
+  quoteBorder: (t) => fg(PAL.ctx, t),
+  hr: (t) => fg(PAL.ctx, t),
+  listBullet: (t) => fg(M.primary, t),
+  bold: (t) => bold(t),
+  italic: (t) => `\x1b[3m${t}\x1b[23m`,
+  underline: (t) => `\x1b[4m${t}\x1b[24m`,
+  strikethrough: (t) => `\x1b[9m${t}\x1b[29m`,
+}
+
+/**
+ * Render a markdown string into the card's content width via pi-tui's own
+ * `Markdown` component (the same renderer stock `AssistantMessageComponent`
+ * uses; bundled with the real pi-tui that validates line widths). `paddingX=0`
+ * keeps every line inside the card; `defaultTextStyle.color` re-applies
+ * `PAL.text` after each inline reset (inline code, links, …) instead of letting
+ * it fall back to the terminal default. Trailing pad spaces are trimmed — the
+ * card adds its own full-width tinted padding. Lines are not width-guarded here;
+ * every caller runs `truncateAnsi` over the finished card.
+ */
+function markdownLines(text: string, width: number): string[] {
+  const inner = Math.max(1, width - 2)
+  let rendered: string[]
+  try {
+    rendered = new Markdown(text.replace(/\r/g, ""), 0, 0, MARKDOWN_THEME, {
+      color: (t) => fg(PAL.text, t),
+    }).render(inner)
+  } catch {
+    return bodyLines(text, inner).map((l) => fg(PAL.text, l))
+  }
+  return rendered.map((l) => (l ? fg(PAL.text, l.replace(/ +$/, "")) : ""))
+}
+
+/**
+ * Short placeholder for a known non-text block. `image`/`diff` are surfaced as
+ * one dim line rather than dropped silently; unknown/toolCall blocks are left
+ * to pi's own inline rendering and return undefined.
+ */
+function placeholderFor(block: Block): string | undefined {
+  if (block.type === "image") {
+    const mime = typeof (block as { mimeType?: unknown }).mimeType === "string" ? ` ${(block as { mimeType: string }).mimeType}` : ""
+    return `[image${mime}]`
+  }
+  if (block.type === "diff") return "[diff]"
+  return undefined
+}
+
+/** Placeholder lines for the known non-text blocks of a turn (image/diff). */
+export function blockPlaceholders(content: unknown): string[] {
+  if (!Array.isArray(content)) return []
+  const out: string[] = []
+  for (const raw of content) {
+    if (!raw || typeof raw !== "object") continue
+    const placeholder = placeholderFor(raw as Block)
+    if (placeholder) out.push(placeholder)
+  }
+  return out
+}
+
+/**
  * Locked user card: `PAL.me` rail + tinted full-width background, min 3 lines
  * (ui-kit `card` buffer). Returns [] for empty content so the caller can fall
  * back to pi's stock rendering.
@@ -115,8 +189,13 @@ function thoughtsBox(width: number, thinking: string[]): string[] {
 export function renderAssistantCard(content: unknown, width: number): string[] {
   const w = Math.max(4, Math.floor(width))
   const { text, thinking } = blocksToParts(content)
+  const placeholders = blockPlaceholders(content)
+  const body = text.trim() ? markdownLines(text, w) : []
+  if (text.trim() && placeholders.length) body.push("")
+  for (const p of placeholders) body.push(fg(PAL.dim, p))
+
   const out: string[] = []
-  if (text.trim()) out.push(...card(w, PAL.agent, bodyLines(text, w - 3).map((l) => fg(PAL.text, l))))
+  if (body.some((l) => l.trim())) out.push(...card(w, PAL.agent, body))
   if (thinking.length) {
     if (out.length) out.push("")
     out.push(...thoughtsBox(w, thinking))
@@ -181,10 +260,10 @@ class TranscriptTurn implements Component {
   }
 }
 
-/** A message is renderable when it has text or at least one thinking block. */
+/** A message is renderable when it has text, thinking, or a known placeholder block. */
 function renderable(content: unknown): boolean {
   const { text, thinking } = blocksToParts(content)
-  return !!text.trim() || thinking.length > 0
+  return !!text.trim() || thinking.length > 0 || blockPlaceholders(content).length > 0
 }
 
 /** The T7 seam adds `isStreaming` to MessageRenderOptions; read it defensively. */

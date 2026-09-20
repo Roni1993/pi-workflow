@@ -2,6 +2,7 @@
 // Run: bash tests/ui-transcript.sh
 import assert from "node:assert"
 import {
+  blockPlaceholders,
   blocksToParts,
   registerTranscript,
   renderAssistantCard,
@@ -25,6 +26,31 @@ const VERY_LONG_THINKING = Array.from(
   { length: 40 },
   (_, i) => `thought ${i + 1}: ${"reasoning about the cache design ".repeat(4)}`,
 ).join("\n")
+
+// Markdown fixture: every feature item 15 asks for, in one turn.
+const MD_CODE = "const ttl = 30_000"
+const MD_INLINE = "wrap `fetch()` with a `Map`"
+const MD_LINK_TEXT = "MDN"
+const MD_LINK_URL = "https://example.com/docs"
+const MD_TABLE_CELL = "ttl"
+const MD_MARKDOWN = [
+  "## Cache plan",
+  "",
+  "Use **in-memory TTL** caching: " + MD_INLINE + ".",
+  "",
+  `A [${MD_LINK_TEXT}](${MD_LINK_URL}) reference.`,
+  "",
+  "```ts",
+  MD_CODE,
+  "```",
+  "",
+  "- key by method + URL",
+  "- never cache non-GET",
+  "",
+  "| option | value |",
+  "| ------ | ----- |",
+  `| ${MD_TABLE_CELL} | 30s |`,
+].join("\n")
 
 /** A render sample: either a user prompt (string) or assistant content blocks. */
 interface Sample {
@@ -65,6 +91,26 @@ const SAMPLES: Sample[] = [
     name: "assistant-very-long-thinking",
     kind: "assistant",
     content: [{ type: "text", text: "ok" }, { type: "thinking", thinking: VERY_LONG_THINKING }],
+  },
+  { name: "assistant-markdown", kind: "assistant", content: [{ type: "text", text: MD_MARKDOWN }] },
+  {
+    name: "assistant-markdown+thinking",
+    kind: "assistant",
+    content: [
+      { type: "thinking", thinking: THINKING_A },
+      { type: "text", text: MD_MARKDOWN },
+      { type: "thinking", thinking: THINKING_B },
+    ],
+  },
+  {
+    name: "assistant-image+diff",
+    kind: "assistant",
+    content: [
+      { type: "text", text: ASSISTANT_TEXT },
+      { type: "image", data: "AAAA", mimeType: "image/png" },
+      { type: "diff", patch: "--- a\n+++ b\n" },
+      { type: "toolCall", name: "bash" },
+    ],
   },
 ]
 
@@ -142,6 +188,82 @@ for (const width of WIDTHS) {
   }
   assert.ok(joined.includes(ASSISTANT_TEXT.slice(0, 10)), `multi-thinking @${width}: text block missing`)
   checks++
+}
+
+// ── markdown is rendered (fences, inline code, lists, links, tables) ────────
+// Markdown inline styling resets the foreground mid-token, so structural
+// assertions run on ANSI-stripped text (both CSI and OSC-8 link sequences).
+const ANSI_RE = /\x1b\[[0-9;]*m|\x1b\]8;;[^\x07\x1b]*(?:\x07|\x1b\\)/g
+const plain = (s: string) => s.replace(ANSI_RE, "")
+
+for (const width of WIDTHS) {
+  const lines = renderAssistantCard(MD_MARKDOWN, width)
+  const joined = plain(lines.join("\n"))
+  const body = lines.filter((l) => l.includes("\x1b[48;2;"))
+
+  // Code fence: language tag + code content survive. Content is only present
+  // when the fence renders (the old raw-text path would print the backticks but
+  // never the highlighted line — check for the code itself).
+  assert.ok(joined.includes("```ts"), `markdown @${width}: code fence opening missing`)
+  checks++
+  assert.ok(joined.includes(MD_CODE.slice(0, 10)), `markdown @${width}: code fence content missing`)
+  checks++
+
+  // List bullets and the table structure render, not raw `| a | b |`.
+  assert.ok(joined.includes("- key by method"), `markdown @${width}: list item missing`)
+  checks++
+  assert.ok(joined.includes("┌") && joined.includes("│") && joined.includes("└"), `markdown @${width}: table frame missing`)
+  checks++
+  assert.ok(joined.includes(MD_TABLE_CELL), `markdown @${width}: table cell missing`)
+  checks++
+  assert.ok(!joined.includes(`| ${MD_TABLE_CELL} |`), `markdown @${width}: raw table row not converted`)
+  checks++
+
+  // Link text present (URL may be OSC-8 hyperlinked or shown inline).
+  assert.ok(joined.includes(MD_LINK_TEXT), `markdown @${width}: link text missing`)
+  checks++
+  // Inline code content present (backticks are dropped by the renderer).
+  assert.ok(joined.includes("fetch()"), `markdown @${width}: inline code content missing`)
+  checks++
+
+  // Card chrome preserved on every body line.
+  assert.ok(body.length >= 3, `markdown @${width}: card body too short (${body.length})`)
+  checks++
+  for (const line of body) {
+    assert.ok(line.includes("▌ "), `markdown @${width}: card rail missing\n${JSON.stringify(line)}`)
+    checks++
+  }
+}
+
+// A text+thinking mix keeps ONE thoughts box and the markdown body.
+for (const width of WIDTHS) {
+  const mix = SAMPLES.find((s) => s.name === "assistant-markdown+thinking")!
+  const joined = plain(renderAssistantCard(mix.content, width).join("\n"))
+  assert.ok(joined.includes("```ts"), `markdown+thinking @${width}: markdown body missing`)
+  checks++
+  assert.ok(joined.includes("Thoughts · 2"), `markdown+thinking @${width}: thoughts box missing`)
+  checks++
+  assert.strictEqual(joined.split("Thoughts ·").length - 1, 1, `markdown+thinking @${width}: more than one thoughts box`)
+  checks++
+}
+
+// ── non-text blocks: placeholders, never thrown away ────────────────────────
+{
+  assert.deepStrictEqual(blockPlaceholders([{ type: "text", text: "x" }, { type: "toolCall", name: "bash" }]), [])
+  checks++
+  assert.deepStrictEqual(
+    blockPlaceholders([{ type: "image", mimeType: "image/png" }, { type: "diff" }]),
+    ["[image image/png]", "[diff]"],
+  )
+  checks++
+  for (const width of WIDTHS) {
+    const joined = renderAssistantCard(
+      [{ type: "text", text: "see this" }, { type: "image", mimeType: "image/png" }],
+      width,
+    ).join("\n")
+    assert.ok(joined.includes("[image image/png]"), `placeholder @${width}: image dropped`)
+    checks++
+  }
 }
 
 // ── registerTranscript contract: component / undefined fallback ─────────────
