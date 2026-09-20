@@ -10,6 +10,7 @@ import { registerTranscript } from "./transcript"
 import { registerTheme } from "./theme"
 import { registerChrome } from "./chrome"
 import { registerResources } from "./resources"
+import { registerEditor } from "./editor"
 import { PAL, card, fg, bold, truncateAnsi } from "./ui-kit"
 
 /** Standalone component that renders a sample card, width-guarded. */
@@ -56,5 +57,6 @@ export default function (pi: ExtensionAPI) {
   registerTheme(pi)
   registerChrome(pi)
   registerResources(pi)
+  registerEditor(pi)
   registerUiKit(pi)
 }
