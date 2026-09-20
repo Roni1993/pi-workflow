@@ -1,10 +1,13 @@
 // Registers and applies the bundled "opencode" theme (themes/opencode.json).
 //
-// Two registration paths so it works both installed and via `-e`:
-//  - package.json `pi.themes` (read on `pi install`)
-//  - the `resources_discover` event returning `themePaths` (read for `-e` loads)
-// `session_start` fires before `resources_discover`, so we also retry the
-// selection once after discovery. Everything is defensive.
+// `setTheme` persists the selection, so on the NEXT startup pi tries to load
+// "opencode" before `resources_discover` runs and prints
+// 'Failed to load theme "opencode": Theme not found' (falling back to dark).
+// A discovered path is too late for that first load. So we also install the
+// theme file into pi's own theme store (~/.pi/agent/themes/) where it is found
+// at startup, then select it once the registry exposes it.
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { homedir } from "node:os"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent"
@@ -17,25 +20,52 @@ function themeDir(): string | undefined {
   }
 }
 
-function apply(ctx: ExtensionContext | undefined): void {
-  const ui = ctx?.ui
-  if (typeof ui?.setTheme !== "function") return
+/** Copy our theme into pi's user theme store so it loads at startup. Idempotent. */
+function installTheme(): void {
+  const dir = themeDir()
+  if (!dir) return
+  const src = join(dir, "opencode.json")
+  const destDir = join(homedir(), ".pi", "agent", "themes")
+  const dest = join(destDir, "opencode.json")
   try {
-    ui.setTheme("opencode")
+    const body = readFileSync(src, "utf8")
+    if (existsSync(dest) && readFileSync(dest, "utf8") === body) return
+    mkdirSync(destDir, { recursive: true })
+    writeFileSync(dest, body)
   } catch {
-    // theme not registered yet (older pi / missing asset) — keep the current one
+    // read-only FS / no home — the resources_discover path still applies it per session
+  }
+}
+
+type ThemeUI = {
+  getTheme?: (name: string) => unknown
+  setTheme?: (theme: string) => { success?: boolean } | undefined
+}
+
+/** Select the theme only when the registry already knows it. */
+function apply(ctx: ExtensionContext | undefined): boolean {
+  const ui = ctx?.ui as ThemeUI | undefined
+  if (!ui || typeof ui.setTheme !== "function") return false
+  try {
+    if (typeof ui.getTheme === "function" && !ui.getTheme("opencode")) return false
+    return ui.setTheme("opencode")?.success !== false
+  } catch {
+    return false
   }
 }
 
 export function registerTheme(pi: ExtensionAPI): void {
-  // Do NOT apply on session_start: it fires before resources_discover, so the
-  // theme registry is still empty and pi prints "Theme not found: opencode".
-  // Register the theme path, then select it on a short backoff once the
-  // registry has consumed themePaths.
+  installTheme()
+
   pi.on("resources_discover", (_event: unknown, ctx: ExtensionContext) => {
     const dir = themeDir()
     if (!dir) return undefined
-    for (const ms of [150, 600, 1500]) setTimeout(() => apply(ctx), ms)
+    // Poll until the registry exposes the theme, then select it (bounded ~6s).
+    let tries = 0
+    const timer = setInterval(() => {
+      tries += 1
+      if (apply(ctx) || tries > 40) clearInterval(timer)
+    }, 150)
     return { themePaths: [dir] }
   })
 }
